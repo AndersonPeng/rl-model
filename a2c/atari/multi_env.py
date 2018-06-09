@@ -2,9 +2,9 @@ import numpy as np
 from multiprocessing import Process, Pipe
 
 
-#---------------------------
+#--------------------------
 # Worker
-#---------------------------
+#--------------------------
 def worker(remote, parent_remote, env_fn_wrapper):
 	parent_remote.close()
 	env = env_fn_wrapper.x()
@@ -26,6 +26,9 @@ def worker(remote, parent_remote, env_fn_wrapper):
 		elif cmd == "reset_task":
 			ob = env.reset_task()
 			remote.send(ob)
+
+		elif cmd == "render":
+			env.render()
 
 		elif cmd == "close":
 			remote.close()
@@ -55,17 +58,14 @@ class CloudpickleWrapper():
 		self.x = pickle.loads(ob)
 
 
-#List of gym envs to run in subprocesses
+#Multiple environment
 class MultiEnv():
-	#---------------------------
-	# Constructor
-	#---------------------------
 	def __init__(self, env_fns):
-		#Create subprocesses
 		self.closed = False
 		self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(len(env_fns))])
 		self.subprocs = [Process(target=worker, args=(work_remote, remote, CloudpickleWrapper(env_fn)))
 						for (work_remote, remote, env_fn) in zip(self.work_remotes, self.remotes, env_fns)]
+		self.n_env = len(self.remotes)
 
 		#Start subprocesses
 		for p in self.subprocs:
@@ -117,6 +117,13 @@ class MultiEnv():
 
 
 	#---------------------------
+	# Render
+	#---------------------------
+	def render(self, rank=0):
+		self.remotes[rank].send(("render", None))
+
+
+	#---------------------------
 	# Close
 	#---------------------------
 	def close(self):
@@ -130,8 +137,3 @@ class MultiEnv():
 			p.join()
 
 		self.closed = True
-
-
-	@property
-	def n_env(self):
-		return len(self.remotes)

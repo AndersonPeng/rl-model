@@ -45,7 +45,8 @@ def conv2d(x, out_dim, k_h=5, k_w=5, d_h=2, d_w=2, name="conv2d"):
 		)
 
 		conv = tf.nn.conv2d(x, W, strides=[1, d_h, d_w, 1], padding="SAME")
-		conv = tf.reshape(tf.nn.bias_add(conv, b), conv.get_shape())
+		conv = tf.nn.bias_add(conv, b)
+		#conv = tf.reshape(tf.nn.bias_add(conv, b), conv.get_shape())
 		return conv
 
 

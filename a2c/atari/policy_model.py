@@ -1,4 +1,3 @@
-import numpy as np
 import tensorflow as tf
 import ops
 
@@ -7,14 +6,11 @@ class PolicyModel(object):
 	#---------------------------
 	# Constructor
 	#---------------------------
-	def __init__(self, sess, ob_space, ac_space, n_env, n_step, n_stack, reuse=False):
+	def __init__(self, sess, img_height, img_width, c_dim, a_dim, reuse=False):
 		self.sess = sess
-		self.init_state = []			#init_state for LSTM
-		mb_size = n_env * n_step
-		img_height, img_width, channel_dim = ob_space.shape
 
-		#ob_ph: (mb_size, img_height, img_width, channel_dim*n_stack)
-		self.ob_ph = tf.placeholder(tf.uint8, (mb_size, img_height, img_width, channel_dim*n_stack))
+		#ob_ph: (mb_size, img_height, img_width, c_dim)
+		self.ob_ph = tf.placeholder(tf.uint8, (None, img_height, img_width, c_dim))
 		ob_normalized = tf.cast(self.ob_ph, tf.float32) / 255.0
 
 		with tf.variable_scope("policy_model", reuse=reuse):
@@ -31,32 +27,45 @@ class PolicyModel(object):
 			h = tf.nn.relu(h)
 			
 			#fc: (mb_size, 512)
-			h = ops.fc(tf.reshape(h, [mb_size, -1]), 512, name="fc1")
+			h = ops.fc(tf.reshape(h, [-1, h.shape[1]*h.shape[2]*h.shape[3]]), 512, name="fc1")
 			h = tf.nn.relu(h)
 
-			#pi:     (mb_size, ac_space.n)
+			#pi:     (mb_size, a_dim)
 			#value:  (mb_size, 1)
-			pi = ops.fc(h, ac_space.n, name="fc_pi")
+			pi = ops.fc(h, a_dim, name="fc_pi")
 			value = ops.fc(h, 1, name="fc_value")
 		
 		#value:  (mb_size)
 		#action: (mb_size)
 		self.value = value[:, 0]
-		self.action = ops.sample(pi)
+		self.cat_dist = tf.distributions.Categorical(pi)
+		self.action = self.cat_dist.sample(1)[0]
 		self.pi = pi
 
 
 	#---------------------------
 	# Forward step
 	#---------------------------
-	def step(self, mb_ob, *_args, **_kwargs):
-		a, v = self.sess.run([self.action, self.value], {self.ob_ph: mb_ob})
-		return a, v, []
+	def step(self, mb_obs):
+		a, v = self.sess.run([self.action, self.value], {self.ob_ph: mb_obs})
+		return a, v
 
 
 	#---------------------------
 	# Forward step for 
 	# value function
 	#---------------------------
-	def value_step(self, mb_ob, *_args, **_kwargs):
-		return self.sess.run(self.value, {self.ob_ph: mb_ob})
+	def value_step(self, mb_obs):
+		return self.sess.run(self.value, {self.ob_ph: mb_obs})
+
+
+	#---------------------------
+	# categorical entropy
+	#---------------------------
+	def cat_entropy(self):
+		a0 = self.pi - tf.reduce_max(self.pi, 1, keepdims=True)
+		ea0 = tf.exp(a0)
+		z0 = tf.reduce_sum(ea0, 1, keepdims=True)
+		p0 = ea0 / z0
+
+		return tf.reduce_sum(p0 * (tf.log(z0) - a0), 1)
