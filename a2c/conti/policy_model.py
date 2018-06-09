@@ -10,10 +10,10 @@ class PolicyModel(object):
 	def __init__(self, sess, s_dim, a_dim, a_low, a_high, reuse=False):
 		self.sess = sess
 
-		#ob_ph: (mb_size, s_dim)
-		self.ob_ph = tf.placeholder(tf.float32, (None, s_dim))
-
 		with tf.variable_scope("actor", reuse=reuse):
+			#ob_ph: (mb_size, s_dim)
+			self.ob_ph = tf.placeholder(tf.float32, (None, s_dim))
+
 			#fc1: (mb_size, 256)
 			h = ops.fc(self.ob_ph, 256, name="acotr_fc1")
 			h = tf.nn.relu(h)

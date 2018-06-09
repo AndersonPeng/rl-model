@@ -82,9 +82,9 @@ policy = PolicyModel(sess, img_height, img_width, c_dim*n_stack, a_dim)
 
 #Placeholders
 #----------------------------
-action_ph = tf.placeholder(tf.int32, [mb_size])
-adv_ph = tf.placeholder(tf.float32, [mb_size])
-discount_return_ph = tf.placeholder(tf.float32, [mb_size])
+action_ph = tf.placeholder(tf.int32, [None])
+adv_ph = tf.placeholder(tf.float32, [None])
+discount_return_ph = tf.placeholder(tf.float32, [None])
 lr_ph = tf.placeholder(tf.float32, [])
 
 

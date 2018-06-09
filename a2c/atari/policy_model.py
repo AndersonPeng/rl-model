@@ -9,11 +9,11 @@ class PolicyModel(object):
 	def __init__(self, sess, img_height, img_width, c_dim, a_dim, reuse=False):
 		self.sess = sess
 
-		#ob_ph: (mb_size, img_height, img_width, c_dim)
-		self.ob_ph = tf.placeholder(tf.uint8, (None, img_height, img_width, c_dim))
-		ob_normalized = tf.cast(self.ob_ph, tf.float32) / 255.0
-
 		with tf.variable_scope("policy_model", reuse=reuse):
+			#ob_ph: (mb_size, img_height, img_width, c_dim)
+			self.ob_ph = tf.placeholder(tf.uint8, (None, img_height, img_width, c_dim))
+			ob_normalized = tf.cast(self.ob_ph, tf.float32) / 255.0
+
 			#conv1: (mb_size, img_height1, img_width1, 32)
 			h = ops.conv2d(ob_normalized, 32, 8, 8, 4, 4, name="conv1")
 			h = tf.nn.relu(h)
@@ -57,15 +57,3 @@ class PolicyModel(object):
 	#---------------------------
 	def value_step(self, mb_obs):
 		return self.sess.run(self.value, {self.ob_ph: mb_obs})
-
-
-	#---------------------------
-	# categorical entropy
-	#---------------------------
-	def cat_entropy(self):
-		a0 = self.pi - tf.reduce_max(self.pi, 1, keepdims=True)
-		ea0 = tf.exp(a0)
-		z0 = tf.reduce_sum(ea0, 1, keepdims=True)
-		p0 = ea0 / z0
-
-		return tf.reduce_sum(p0 * (tf.log(z0) - a0), 1)

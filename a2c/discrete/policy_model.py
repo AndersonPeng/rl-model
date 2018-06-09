@@ -9,23 +9,23 @@ class PolicyModel(object):
 	def __init__(self, sess, s_dim, a_dim, reuse=False):
 		self.sess = sess
 
-		#ob_ph: (mb_size, s_dim)
-		self.ob_ph = tf.placeholder(tf.float32, (None, s_dim))
-
 		with tf.variable_scope("policy_model", reuse=reuse):
-			#conv1: (mb_size, 64)
+			#ob_ph: (mb_size, s_dim)
+			self.ob_ph = tf.placeholder(tf.float32, [None, s_dim])
+
+			#fc1: (mb_size, 64)
 			h = ops.fc(self.ob_ph, 64, name="fc1")
 			h = tf.nn.relu(h)
 			
-			#conv2: (mb_size, 128)
+			#fc2: (mb_size, 128)
 			h = ops.fc(h, 128, name="fc2")
 			h = tf.nn.relu(h)
 			
-			#conv3: (mb_size, 128)	
+			#fc3: (mb_size, 128)	
 			h = ops.fc(h, 128, name="fc3")
 			h = tf.nn.relu(h)
 			
-			#fc: (mb_size, 64)
+			#fc4: (mb_size, 64)
 			h = ops.fc(h, 64, name="fc4")
 			h = tf.nn.relu(h)
 

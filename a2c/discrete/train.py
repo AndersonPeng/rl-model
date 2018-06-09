@@ -76,9 +76,9 @@ policy = PolicyModel(sess, s_dim, a_dim)
 #action_ph: (mb_size)
 #adv_ph:    (mb_size)
 #reward_ph: (mb_size)
-action_ph = tf.placeholder(tf.int32, [mb_size])
-adv_ph = tf.placeholder(tf.float32, [mb_size])
-discount_return_ph = tf.placeholder(tf.float32, [mb_size])
+action_ph = tf.placeholder(tf.int32, [None])
+adv_ph = tf.placeholder(tf.float32, [None])
+discount_return_ph = tf.placeholder(tf.float32, [None])
 lr_ph = tf.placeholder(tf.float32, [])
 
 
@@ -127,11 +127,13 @@ t_start = time.time()
 for it in range(global_step, n_iter+global_step+1):
 	if is_render: env.render()
 
-	#Train
+	#Run the environment
 	mb_obs, mb_actions, mb_values, mb_discount_returns = runner.run(policy)
-	mb_advs = mb_discount_returns - mb_values
 	avg_return.append(np.mean(mb_discount_returns))
 
+	mb_advs = mb_discount_returns - mb_values
+
+	#Train
 	cur_pg_loss, cur_value_loss, cur_ent, _ = sess.run([pg_loss, value_loss, entropy_bonus, opt], feed_dict={
 		policy.ob_ph: mb_obs,
 		action_ph: mb_actions,

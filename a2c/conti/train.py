@@ -44,7 +44,7 @@ actor_lr = 0.00002
 critic_lr = 0.0001
 lr_decay = 0.99
 eps = 1e-5
-n_iter = 1000000
+n_iter = 300000
 disp_step = 100
 save_step = 1000
 is_render = args.render
@@ -78,9 +78,9 @@ policy = PolicyModel(sess, s_dim, a_dim, a_low, a_high)
 #action_ph: (mb_size, a_dim)
 #adv_ph:    (mb_size)
 #reward_ph: (mb_size)
-action_ph = tf.placeholder(tf.float32, [mb_size, a_dim])
-adv_ph = tf.placeholder(tf.float32, [mb_size])
-discount_return_ph = tf.placeholder(tf.float32, [mb_size])
+action_ph = tf.placeholder(tf.float32, [None, a_dim])
+adv_ph = tf.placeholder(tf.float32, [None])
+discount_return_ph = tf.placeholder(tf.float32, [None])
 actor_lr_ph = tf.placeholder(tf.float32, [])
 critic_lr_ph = tf.placeholder(tf.float32, [])
 
