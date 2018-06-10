@@ -13,11 +13,11 @@ import argparse
 #-------------------------
 # Make an environment
 #-------------------------
-def make_env(rank, env_id="BipedalWalker-v2", rand_seed=0):
+def make_env(rank, env_id="BipedalWalker-v2", rand_seed=0, unwrap=False):
 	def _thunk():
 		env = gym.make(env_id)
+		if unwrap: env = env.unwrapped
 		env.seed(rand_seed + rank)
-		#env = env_wrapper.ModifiedRewardEnv(env)
 		
 		return env
 
@@ -29,6 +29,7 @@ def make_env(rank, env_id="BipedalWalker-v2", rand_seed=0):
 parser = argparse.ArgumentParser()
 parser.add_argument("--env", default="BipedalWalker-v2")
 parser.add_argument("--render", action="store_true")
+parser.add_argument("--unwrap", action="store_true")
 args = parser.parse_args()
 
 

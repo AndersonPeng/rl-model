@@ -9,7 +9,7 @@ class PolicyModel(object):
 	def __init__(self, sess, img_height, img_width, c_dim, a_dim, reuse=False):
 		self.sess = sess
 
-		with tf.variable_scope("policy_model", reuse=reuse):
+		with tf.variable_scope("policy", reuse=reuse):
 			#ob_ph: (mb_size, img_height, img_width, c_dim)
 			self.ob_ph = tf.placeholder(tf.uint8, (None, img_height, img_width, c_dim))
 			ob_normalized = tf.cast(self.ob_ph, tf.float32) / 255.0

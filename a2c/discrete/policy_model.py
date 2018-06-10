@@ -9,30 +9,41 @@ class PolicyModel(object):
 	def __init__(self, sess, s_dim, a_dim, reuse=False):
 		self.sess = sess
 
-		with tf.variable_scope("policy_model", reuse=reuse):
+		with tf.variable_scope("policy", reuse=reuse):
 			#ob_ph: (mb_size, s_dim)
 			self.ob_ph = tf.placeholder(tf.float32, [None, s_dim])
 
-			#fc1: (mb_size, 64)
-			h = ops.fc(self.ob_ph, 64, name="fc1")
-			h = tf.nn.relu(h)
-			
-			#fc2: (mb_size, 128)
-			h = ops.fc(h, 128, name="fc2")
-			h = tf.nn.relu(h)
-			
-			#fc3: (mb_size, 128)	
-			h = ops.fc(h, 128, name="fc3")
-			h = tf.nn.relu(h)
-			
-			#fc4: (mb_size, 64)
-			h = ops.fc(h, 64, name="fc4")
-			h = tf.nn.relu(h)
+			with tf.variable_scope("actor", reuse=reuse):
+				#fc1: (mb_size, 64)
+				h = ops.fc(self.ob_ph, 64, name="a_fc1")
+				h = tf.nn.relu(h)
+				
+				#fc2: (mb_size, 128)
+				h = ops.fc(h, 128, name="a_fc2")
+				h = tf.nn.relu(h)
+				
+				#fc3: (mb_size, 128)	
+				h = ops.fc(h, 128, name="a_fc3")
+				h = tf.nn.relu(h)
 
-			#pi:     (mb_size, a_dim)
-			#value:  (mb_size, 1)
-			pi = ops.fc(h, a_dim, name="fc_pi")
-			value = ops.fc(h, 1, name="fc_value")
+				#pi:     (mb_size, a_dim)
+				pi = ops.fc(h, a_dim, name="a_fc_pi")
+
+			with tf.variable_scope("critic", reuse=reuse):
+				#fc1: (mb_size, 64)
+				h = ops.fc(self.ob_ph, 64, name="c_fc1")
+				h = tf.nn.relu(h)
+				
+				#fc2: (mb_size, 128)
+				h = ops.fc(h, 128, name="c_fc2")
+				h = tf.nn.relu(h)
+				
+				#fc3: (mb_size, 128)	
+				h = ops.fc(h, 128, name="c_fc3")
+				h = tf.nn.relu(h)
+
+				#value:  (mb_size, 1)
+				value = ops.fc(h, 1, name="c_fc_value")
 		
 		#value:  (mb_size)
 		#action: (mb_size)

@@ -10,6 +10,7 @@ import argparse
 #----------------------------
 parser = argparse.ArgumentParser()
 parser.add_argument("--env", default="CartPole-v0")
+parser.add_argument("--unwrap", action="store_true")
 args = parser.parse_args()
 
 
@@ -22,6 +23,7 @@ save_dir = "./save_" + env_id
 #Create the environment
 #----------------------------
 env = gym.make(env_id)
+if args.unwrap: env = env.unwrapped
 a_dim = env.action_space.n
 s_dim = env.observation_space.shape[0]
 

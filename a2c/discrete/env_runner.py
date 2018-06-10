@@ -42,6 +42,7 @@ class MultiEnvRunner:
 		for step in range(self.n_step):
 			#actions: (n_env)
 			#values:  (n_env)
+			#obs: (n_env, s_dim)
 			actions, values = policy.step(self.obs)
 			mb_obs.append(np.copy(self.obs))
 			mb_values.append(values)
@@ -53,9 +54,6 @@ class MultiEnvRunner:
 			self.obs, rewards, dones, info = self.env.step(actions)
 			mb_rewards.append(rewards)
 			mb_dones.append(dones)
-
-			for i, done in enumerate(dones):
-				if done: self.obs[i] = self.obs[i] * 0
 
 		#last_values: (n_env)
 		last_values = policy.value_step(self.obs).tolist()

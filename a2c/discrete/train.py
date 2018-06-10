@@ -13,11 +13,11 @@ import argparse
 #-------------------------
 # Make an environment
 #-------------------------
-def make_env(rank, env_id="CartPole-v0", rand_seed=0):
+def make_env(rank, env_id="CartPole-v0", rand_seed=0, unwrap=False):
 	def _thunk():
 		env = gym.make(env_id)
+		if unwrap: env = env.unwrapped
 		env.seed(rand_seed + rank)
-		#env = env_wrapper.ClipRewardEnv(env)
 		
 		return env
 
@@ -29,6 +29,7 @@ def make_env(rank, env_id="CartPole-v0", rand_seed=0):
 parser = argparse.ArgumentParser()
 parser.add_argument("--env", default="CartPole-v0")
 parser.add_argument("--render", action="store_true")
+parser.add_argument("--unwrap", action="store_true")
 args = parser.parse_args()
 
 
@@ -38,10 +39,10 @@ n_env = 16
 n_step = 8
 mb_size = n_env*n_step
 gamma = 0.99
-value_weight = 0.5
 ent_weight = 0.05
 max_grad_norm=0.5
-lr = 7e-4
+actor_lr = 1e-4
+critic_lr = 7e-4
 lr_decay = 0.99
 eps = 1e-5
 n_iter = 300000
@@ -54,7 +55,7 @@ save_dir = "./save_" + env_id
 
 #Create multiple environments
 #----------------------------
-env = MultiEnv([make_env(i, env_id=env_id) for i in range(n_env)])
+env = MultiEnv([make_env(i, env_id=env_id, unwrap=args.unwrap) for i in range(n_env)])
 a_dim = env.ac_space.n
 s_dim = env.ob_space.shape[0]
 runner = MultiEnvRunner(env, s_dim, n_step, gamma)
@@ -79,25 +80,34 @@ policy = PolicyModel(sess, s_dim, a_dim)
 action_ph = tf.placeholder(tf.int32, [None])
 adv_ph = tf.placeholder(tf.float32, [None])
 discount_return_ph = tf.placeholder(tf.float32, [None])
-lr_ph = tf.placeholder(tf.float32, [])
+actor_lr_ph = tf.placeholder(tf.float32, [])
+critic_lr_ph = tf.placeholder(tf.float32, [])
 
 
 #Loss
 #----------------------------
 nll_loss = -policy.cat_dist.log_prob(action_ph)
 pg_loss = tf.reduce_mean(adv_ph * nll_loss)
-value_loss = tf.reduce_mean(tf.squared_difference(tf.squeeze(policy.value), discount_return_ph) / 2.0)
 entropy_bonus = tf.reduce_mean(policy.cat_dist.entropy())
-loss = pg_loss + value_weight*value_loss - ent_weight*entropy_bonus
+actor_loss = pg_loss - ent_weight*entropy_bonus
+critic_loss = tf.reduce_mean(tf.squared_difference(tf.squeeze(policy.value), discount_return_ph) / 2.0)
 
 
 #Optimizer
 #----------------------------
 t_var = tf.trainable_variables()
-grads = tf.gradients(loss, t_var)
-grads, grad_norm = tf.clip_by_global_norm(grads, max_grad_norm)
-grads = list(zip(grads, t_var))
-opt = tf.train.RMSPropOptimizer(lr_ph, decay=lr_decay, epsilon=eps).apply_gradients(grads)
+actor_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="policy/actor")
+critic_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="policy/critic")
+
+actor_grads = tf.gradients(actor_loss, actor_var)
+actor_grads, actor_grad_norm = tf.clip_by_global_norm(actor_grads, max_grad_norm)
+actor_grads = list(zip(actor_grads, actor_var))
+actor_opt = tf.train.RMSPropOptimizer(actor_lr_ph, decay=lr_decay, epsilon=eps).apply_gradients(actor_grads)
+
+critic_grads = tf.gradients(critic_loss, critic_var)
+critic_grads, critic_grad_norm = tf.clip_by_global_norm(critic_grads, max_grad_norm)
+critic_grads = list(zip(critic_grads, critic_var))
+critic_opt = tf.train.RMSPropOptimizer(critic_lr_ph, decay=lr_decay, epsilon=eps).apply_gradients(critic_grads)
 
 tf.contrib.slim.model_analyzer.analyze_vars(t_var, print_info=True)
 
@@ -134,27 +144,28 @@ for it in range(global_step, n_iter+global_step+1):
 	mb_advs = mb_discount_returns - mb_values
 
 	#Train
-	cur_pg_loss, cur_value_loss, cur_ent, _ = sess.run([pg_loss, value_loss, entropy_bonus, opt], feed_dict={
+	cur_actor_loss, cur_critic_loss, cur_ent, _, _ = sess.run([actor_loss, critic_loss, entropy_bonus, actor_opt, critic_opt], feed_dict={
 		policy.ob_ph: mb_obs,
 		action_ph: mb_actions,
 		adv_ph: mb_advs,
 		discount_return_ph: mb_discount_returns,
-		lr_ph: lr
+		actor_lr_ph: actor_lr,
+		critic_lr_ph: critic_lr
 	})
 
 	#Show the result
-	if it % disp_step == 0:
+	if it % disp_step == 0 and it > global_step:
 		n_sec = time.time() - t_start
 		fps = int((it-global_step)*n_env*n_step / n_sec)
 		avg_r = sum(avg_return) / disp_step
 
-		print("[{:5d} / {:5d}]".format(it, n_iter))
+		print("[{:5d} / {:5d}]".format(it, n_iter+global_step))
 		print("----------------------------------")
 		print("Total timestep = {:d}".format(it * mb_size))
 		print("Elapsed time = {:.2f} sec".format(n_sec))
 		print("FPS = {:d}".format(fps))
-		print("pg_loss = {:.6f}".format(cur_pg_loss))
-		print("value_loss = {:.6f}".format(cur_value_loss))
+		print("actor_loss = {:.6f}".format(cur_actor_loss))
+		print("critic_loss = {:.6f}".format(cur_critic_loss))
 		print("entropy = {:.6f}".format(cur_ent))
 		print("Avg return = {:.6f}".format(avg_r))
 		print()

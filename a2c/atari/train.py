@@ -152,7 +152,7 @@ for it in range(global_step, n_iter+global_step+1):
 		fps = int((it-global_step)*n_env*n_step / n_sec)
 		avg_r = sum(avg_return) / disp_step
 
-		print("[{:5d} / {:5d}]".format(it, n_iter))
+		print("[{:5d} / {:5d}]".format(it, n_iter+global_step))
 		print("----------------------------------")
 		print("Total timestep = {:d}".format(it * mb_size))
 		print("Elapsed time = {:.2f} sec".format(n_sec))

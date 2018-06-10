@@ -8,6 +8,7 @@ The implementation is based on [OpenAI Baselines](https://github.com/openai/base
 
 - tensorflow-1.8.0
 - gym-0.10.5
+- mujoco-py-1.50.1 (optional)
 
 <br>
 
@@ -19,11 +20,22 @@ The implementation is based on [OpenAI Baselines](https://github.com/openai/base
 
 ## Experiment Results
 
-- BipedalWalker-v2
+### Discrete:
 
-![](./fig/BipedalWalker-v2.png)
+- CartPole-v0
+
+![](./fig/CartPole-v0.png)
 
 <br>
+
+- MountainCar-v0
+
+![](./fig/MountainCar-v0.png)
+
+<br>
+<br>
+
+### Atari (Discrete):
 
 - BreakoutNoFrameskip-v4
 
@@ -37,6 +49,21 @@ The implementation is based on [OpenAI Baselines](https://github.com/openai/base
 
 <br>
 
-- CartPole-v0
+- SpaceInvadersNoFrameskip-v4
 
-![](./fig/CartPole-v0.png)
+![](./fig/SpaceInvadersNoFrameskip-v4.png)
+
+<br>
+<br>
+
+### Continuous:
+
+- InvertedPendulum-v2
+
+![](./fig/InvertedPendulum-v2.png)
+
+<br>
+
+- BipedalWalker-v2
+
+![](./fig/BipedalWalker-v2.png)
