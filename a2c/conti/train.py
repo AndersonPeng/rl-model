@@ -36,16 +36,16 @@ args = parser.parse_args()
 #Parameters
 #----------------------------
 n_env = 16
-n_step = 8
+n_step = 5
 mb_size = n_env*n_step
-gamma = 0.999
+gamma = 0.995
 ent_weight = 0.005
 max_grad_norm=0.5
-actor_lr = 0.00002
-critic_lr = 0.0001
+actor_lr = 2e-4
+critic_lr = 1e-4
 lr_decay = 0.99
 eps = 1e-5
-n_iter = 300000
+n_iter = 1000000
 disp_step = 100
 save_step = 1000
 is_render = args.render
@@ -79,9 +79,9 @@ policy = PolicyModel(sess, s_dim, a_dim, a_low, a_high)
 #action_ph: (mb_size, a_dim)
 #adv_ph:    (mb_size)
 #reward_ph: (mb_size)
-action_ph = tf.placeholder(tf.float32, [None, a_dim])
-adv_ph = tf.placeholder(tf.float32, [None])
-discount_return_ph = tf.placeholder(tf.float32, [None])
+action_ph = tf.placeholder(tf.float32, [None, a_dim], name="action")
+adv_ph = tf.placeholder(tf.float32, [None], name="advantage")
+discount_return_ph = tf.placeholder(tf.float32, [None], name="discounted_return")
 actor_lr_ph = tf.placeholder(tf.float32, [])
 critic_lr_ph = tf.placeholder(tf.float32, [])
 
@@ -154,12 +154,12 @@ for it in range(global_step, n_iter+global_step+1):
 	})
 
 	#Show the result
-	if it % disp_step == 0:
+	if it % disp_step == 0 and it > global_step:
 		n_sec = time.time() - t_start
 		fps = int((it-global_step)*n_env*n_step / n_sec)
 		avg_r = sum(avg_return) / disp_step
 
-		print("[{:5d} / {:5d}]".format(it, n_iter))
+		print("[{:5d} / {:5d}]".format(it, n_iter+global_step))
 		print("----------------------------------")
 		print("Total timestep = {:d}".format(it * mb_size))
 		print("Elapsed time = {:.2f} sec".format(n_sec))

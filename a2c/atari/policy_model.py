@@ -11,7 +11,7 @@ class PolicyModel(object):
 
 		with tf.variable_scope("policy", reuse=reuse):
 			#ob_ph: (mb_size, img_height, img_width, c_dim)
-			self.ob_ph = tf.placeholder(tf.uint8, (None, img_height, img_width, c_dim))
+			self.ob_ph = tf.placeholder(tf.uint8, [None, img_height, img_width, c_dim], name="observation")
 			ob_normalized = tf.cast(self.ob_ph, tf.float32) / 255.0
 
 			#conv1: (mb_size, img_height1, img_width1, 32)

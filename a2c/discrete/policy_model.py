@@ -11,7 +11,7 @@ class PolicyModel(object):
 
 		with tf.variable_scope("policy", reuse=reuse):
 			#ob_ph: (mb_size, s_dim)
-			self.ob_ph = tf.placeholder(tf.float32, [None, s_dim])
+			self.ob_ph = tf.placeholder(tf.float32, [None, s_dim], name="observation")
 
 			with tf.variable_scope("actor", reuse=reuse):
 				#fc1: (mb_size, 64)

@@ -9,38 +9,46 @@ class PolicyModel(object):
 	#---------------------------
 	def __init__(self, sess, s_dim, a_dim, a_low, a_high, reuse=False):
 		self.sess = sess
+		
+		#ob_ph: (mb_size, s_dim)
+		self.ob_ph = tf.placeholder(tf.float32, [None, s_dim], name="observation")
 
 		with tf.variable_scope("actor", reuse=reuse):
-			#ob_ph: (mb_size, s_dim)
-			self.ob_ph = tf.placeholder(tf.float32, (None, s_dim))
-
-			#fc1: (mb_size, 256)
-			h = ops.fc(self.ob_ph, 256, name="acotr_fc1")
+			#fc1: (mb_size, 128)
+			h = ops.fc(self.ob_ph, 128, name="a_fc1")
 			h = tf.nn.relu(h)
 			
 			#fc2: (mb_size, 128)
-			h = ops.fc(h, 128, name="actor_fc2")
+			h = ops.fc(h, 128, name="a_fc2")
+			h = tf.nn.relu(h)
+
+			#fc3: (mb_size, 128)
+			h = ops.fc(h, 128, name="a_fc3")
 			h = tf.nn.relu(h)
 
 			#pi_mu: (mb_size, a_dim)
-			mu = ops.fc(h, a_dim, name="actor_fc_mu")
+			mu = ops.fc(h, a_dim, name="a_fc_mu")
 			mu = tf.nn.tanh(mu)
 
 			#pi_sigma: (mb_size, a_dim)
-			sigma = ops.fc(h, a_dim, name="actor_fc_sigma")
+			sigma = ops.fc(h, a_dim, name="a_fc_sigma")
 			sigma = tf.nn.softplus(sigma)
 
 		with tf.variable_scope("critic", reuse=reuse):
-			#fc1: (mb_size, 256)
-			h = ops.fc(self.ob_ph, 256, name="critic_fc1")
+			#fc1: (mb_size, 128)
+			h = ops.fc(self.ob_ph, 128, name="c_fc1")
 			h = tf.nn.relu(h)
 			
 			#fc2: (mb_size, 128)
-			h = ops.fc(h, 128, name="critic_fc2")
+			h = ops.fc(h, 128, name="c_fc2")
+			h = tf.nn.relu(h)
+
+			#fc3: (mb_size, 128)
+			h = ops.fc(h, 128, name="c_fc3")
 			h = tf.nn.relu(h)
 
 			#value: (mb_size, 1)
-			value = ops.fc(h, 1, name="critic_fc_value")
+			value = ops.fc(h, 1, name="c_fc_value")
 		
 		with tf.name_scope("wrap_a_out"):
 			mu = mu * a_high
