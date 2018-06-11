@@ -15,6 +15,7 @@ The implementation is based on [OpenAI Baselines](https://github.com/openai/base
 ## Models
 
 - Advantage Actor-Critic (A2C) (Original paper: [Asynchronous Methods for Deep Reinforcement Learning](https://arxiv.org/abs/1602.01783))
+- Proximal Policy Optimization (PPO) (Original paper: [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347))
 
 <br>
 
