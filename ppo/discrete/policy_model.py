@@ -1,5 +1,7 @@
 import tensorflow as tf
+import numpy as np
 import ops
+import distribs
 
 
 class PolicyModel(object):
@@ -16,49 +18,42 @@ class PolicyModel(object):
 			with tf.variable_scope("actor", reuse=reuse):
 				#fc1: (mb_size, 64)
 				h = ops.fc(self.ob_ph, 64, name="a_fc1")
-				h = tf.nn.relu(h)
+				h = tf.nn.tanh(h)
 				
-				#fc2: (mb_size, 128)
-				h = ops.fc(h, 128, name="a_fc2")
-				h = tf.nn.relu(h)
-				
-				#fc3: (mb_size, 128)	
-				h = ops.fc(h, 128, name="a_fc3")
-				h = tf.nn.relu(h)
+				#fc2: (mb_size, 64)
+				h = ops.fc(h, 64, name="a_fc2")
+				h = tf.nn.tanh(h)
 
-				#pi:     (mb_size, a_dim)
-				pi = ops.fc(h, a_dim, name="a_fc_pi")
+				#fc_mean (mb_size, a_dim)
+				logits = ops.fc(h, a_dim, name="a_fc_logits")
 
 			with tf.variable_scope("critic", reuse=reuse):
 				#fc1: (mb_size, 64)
 				h = ops.fc(self.ob_ph, 64, name="c_fc1")
-				h = tf.nn.relu(h)
+				h = tf.nn.tanh(h)
 				
-				#fc2: (mb_size, 128)
-				h = ops.fc(h, 128, name="c_fc2")
-				h = tf.nn.relu(h)
-				
-				#fc3: (mb_size, 128)	
-				h = ops.fc(h, 128, name="c_fc3")
-				h = tf.nn.relu(h)
+				#fc2: (mb_size, 64)
+				h = ops.fc(h, 64, name="c_fc2")
+				h = tf.nn.tanh(h)
 
-				#value:  (mb_size, 1)
+				#value: (mb_size, 1)
 				value = ops.fc(h, 1, name="c_fc_value")
-		
-		#value:  (mb_size)
-		#action: (mb_size)
+
+		#value:       (mb_size)
+		#action:      (mb_size)
+		#neg_logprob: (mb_size)
 		self.value = value[:, 0]
-		self.cat_dist = tf.distributions.Categorical(pi)
-		self.action = self.cat_dist.sample(1)[0]
-		self.pi = pi
+		self.distrib = distribs.CategoricalDistrib(logits)
+		self.action = self.distrib.sample()
+		self.neg_logprob = self.distrib.neg_logp(self.action)
 
 
 	#---------------------------
 	# Forward step
 	#---------------------------
 	def step(self, mb_obs):
-		a, v = self.sess.run([self.action, self.value], {self.ob_ph: mb_obs})
-		return a, v
+		a, v, nlp = self.sess.run([self.action, self.value, self.neg_logprob], {self.ob_ph: mb_obs})
+		return a, v, nlp
 
 
 	#---------------------------
@@ -67,3 +62,11 @@ class PolicyModel(object):
 	#---------------------------
 	def value_step(self, mb_obs):
 		return self.sess.run(self.value, {self.ob_ph: mb_obs})
+
+
+	#---------------------------
+	# Forward step for 
+	# sampling actions
+	#---------------------------
+	def action_step(self, mb_obs):
+		return self.sess.run(self.action, {self.ob_ph: mb_obs})

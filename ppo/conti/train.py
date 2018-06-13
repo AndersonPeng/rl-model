@@ -35,22 +35,23 @@ args = parser.parse_args()
 
 #Parameters
 #----------------------------
-n_env = 16
-n_step = 8
+n_env = 8
+n_step = 256
 mb_size = n_env*n_step
-sample_mb_size = 32
+sample_mb_size = 64
+sample_n_mb = mb_size // sample_mb_size
+sample_n_epoch = 8
 gamma = 0.99
 clip_val = 0.2
-ent_weight = 0.005
-max_grad_norm=0.5
-actor_lr = 1e-4
-critic_lr = 5e-4
+ent_weight = 0.0
+v_weight = 0.5
+max_grad_norm = 0.5
+lr = 3e-4
 lr_decay = 0.99
 eps = 1e-5
-update_iter = 4
-n_iter = 300000
-disp_step = 100
-save_step = 1000
+n_iter = 30000
+disp_step = 10
+save_step = 100
 is_render = args.render
 env_id = args.env
 save_dir = "./save_" + env_id
@@ -69,59 +70,58 @@ runner = MultiEnvRunner(env, s_dim, a_dim, n_step, gamma)
 #Create the model
 #----------------------------
 config = tf.ConfigProto(
+	allow_soft_placement=True,
 	intra_op_parallelism_threads=n_env,
 	inter_op_parallelism_threads=n_env
 )
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
 policy = PolicyModel(sess, s_dim, a_dim, a_low, a_high, "policy")
-policy_old = PolicyModel(sess, s_dim, a_dim, a_low, a_high, "policy_old")
-
-t_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "policy/")
-t_var_old = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "policy_old/")
-assign_ops = [tf.assign(v_old, v) for v_old, v in zip(t_var_old, t_var)]
 
 
 #Placeholders
 #----------------------------
-#action_ph: (mb_size, a_dim)
-#adv_ph:    (mb_size)
-#reward_ph: (mb_size)
+#action_ph:          (mb_size, a_dim)
+#old_neg_logprob_ph: (mb_size)
+#old_v_pred_ph:      (mb_size)
+#adv_ph:             (mb_size)
+#return_ph:          (mb_size)
 action_ph = tf.placeholder(tf.float32, [None, a_dim], name="action")
+old_neg_logprob_ph = tf.placeholder(tf.float32, [None], name="old_negtive_log_prob")
+old_v_pred_ph = tf.placeholder(tf.float32, [None], name="old_value_pred")
 adv_ph = tf.placeholder(tf.float32, [None], name="advantage")
-discount_return_ph = tf.placeholder(tf.float32, [None], name="discounted_return")
-actor_lr_ph = tf.placeholder(tf.float32, [])
-critic_lr_ph = tf.placeholder(tf.float32, [])
+return_ph = tf.placeholder(tf.float32, [None], name="return")
+lr_ph = tf.placeholder(tf.float32, [])
+clip_ph = tf.placeholder(tf.float32, [])
 
 
 #Loss
 #----------------------------
-log_prob = policy.normal_dist.log_prob(action_ph)
-log_prob_old = policy_old.normal_dist.log_prob(action_ph)
-ratio = tf.exp(log_prob - log_prob_old)
-clipped_ratio = tf.clip_by_value(ratio, 1 - clip_val, 1 + clip_val)
+neg_logprob = policy.distrib.neg_logp(action_ph)
+ent = tf.reduce_mean(policy.distrib.entropy())
 
-adv_expand = tf.expand_dims(adv_ph, -1)
-clipped_loss = -tf.reduce_mean(tf.minimum(adv_expand * ratio, adv_expand * clipped_ratio))
-entropy_bonus = tf.reduce_mean(policy.normal_dist.entropy())
-actor_loss = clipped_loss - ent_weight*entropy_bonus
-critic_loss = tf.reduce_mean(tf.squared_difference(tf.squeeze(policy.value), discount_return_ph) / 2.0)
+v_pred = policy.value
+v_pred_clip = old_v_pred_ph + tf.clip_by_value(v_pred - old_v_pred_ph, -clip_ph, clip_ph)
+v_loss1 = tf.square(v_pred - return_ph)
+v_loss2 = tf.square(v_pred_clip - return_ph)
+v_loss = 0.5 * tf.reduce_mean(tf.maximum(v_loss1, v_loss2))
+
+ratio = tf.exp(old_neg_logprob_ph - neg_logprob)
+pg_loss1 = -adv_ph * ratio
+pg_loss2 = -adv_ph * tf.clip_by_value(ratio, 1.0 - clip_ph, 1.0 + clip_ph)
+pg_loss = tf.reduce_mean(tf.maximum(pg_loss1, pg_loss2))
+
+loss = pg_loss - ent_weight*ent + v_weight*v_loss
 
 
 #Optimizer
 #----------------------------
-actor_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="policy/actor")
-critic_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="policy/critic")
+t_var = tf.trainable_variables()
 
-actor_grads = tf.gradients(actor_loss, actor_var)
-actor_grads, actor_grad_norm = tf.clip_by_global_norm(actor_grads, max_grad_norm)
-actor_grads = list(zip(actor_grads, actor_var))
-actor_opt = tf.train.AdamOptimizer(actor_lr_ph).apply_gradients(actor_grads)
-
-critic_grads = tf.gradients(critic_loss, critic_var)
-critic_grads, critic_grad_norm = tf.clip_by_global_norm(critic_grads, max_grad_norm)
-critic_grads = list(zip(critic_grads, critic_var))
-critic_opt = tf.train.AdamOptimizer(critic_lr_ph).apply_gradients(critic_grads)
+grads = tf.gradients(loss, t_var)
+grads, actor_grad_norm = tf.clip_by_global_norm(grads, max_grad_norm)
+grads = list(zip(grads, t_var))
+opt = tf.train.AdamOptimizer(lr_ph, epsilon=eps).apply_gradients(grads)
 
 tf.contrib.slim.model_analyzer.analyze_vars(t_var, print_info=True)
 
@@ -145,6 +145,7 @@ else:
 	global_step = 0
 
 avg_return = []
+rand_idx = np.arange(mb_size)
 return_fp = open(os.path.join(save_dir, "avg_return.txt"), "a+")
 t_start = time.time()
 
@@ -152,52 +153,56 @@ for it in range(global_step, n_iter+global_step+1):
 	if is_render: env.render()
 
 	#Run the environment
-	mb_obs, mb_actions, mb_values, mb_discount_returns = runner.run(policy)
-	avg_return.append(np.mean(mb_discount_returns))
+	mb_obs, mb_actions, mb_neg_logprobs, mb_values, mb_returns = runner.run(policy)
 
 	#Train
-	sess.run(assign_ops)
-	for i in range(update_iter):
-		sample_idx = np.random.randint(low=0, high=mb_size, size=sample_mb_size)
-		sampled_obs = np.take(mb_obs, indices=sample_idx, axis=0)
-		sampled_actions = np.take(mb_actions, indices=sample_idx, axis=0)
-		sampled_values = np.take(mb_values, indices=sample_idx, axis=0)
-		sampled_discount_returns = np.take(mb_discount_returns, indices=sample_idx, axis=0)
-		sampled_advs = sampled_discount_returns - sampled_values
+	for i in range(sample_n_epoch):
+		np.random.shuffle(rand_idx)
 
-		_, _, cur_critic_loss, cur_actor_loss, cur_ent = sess.run([actor_opt, critic_opt, critic_loss, actor_loss, entropy_bonus], feed_dict={
-			policy.ob_ph: sampled_obs,
-			policy_old.ob_ph: sampled_obs,
-			action_ph: sampled_actions,
-			adv_ph: sampled_advs,
-			discount_return_ph: sampled_discount_returns,
-			actor_lr_ph: actor_lr,
-			critic_lr_ph: critic_lr
-		})
+		for j in range(sample_n_mb):
+			sample_idx = rand_idx[j*sample_mb_size : (j+1)*sample_mb_size]
+			sample_obs = mb_obs[sample_idx]
+			sample_actions = mb_actions[sample_idx]
+			sample_values = mb_values[sample_idx]
+			sample_neg_logprobs = mb_neg_logprobs[sample_idx]
+			sample_returns = mb_returns[sample_idx]
+			sample_advs = sample_returns - sample_values
+			sample_advs = (sample_advs - sample_advs.mean()) / (sample_advs.std() + 1e-8)
+
+			cur_pg_loss, cur_v_loss, cur_ent, _ = sess.run([pg_loss, v_loss, ent, opt], feed_dict={
+				policy.ob_ph: sample_obs,
+				action_ph: sample_actions,
+				old_neg_logprob_ph: sample_neg_logprobs,
+				old_v_pred_ph: sample_values,
+				adv_ph: sample_advs,
+				return_ph: sample_returns,
+				lr_ph: lr,
+				clip_ph: clip_val
+			})
 
 	#Show the result
-	if it % disp_step == 0 and it > global_step:
+	if it % disp_step == 0 and it > 1:
 		n_sec = time.time() - t_start
 		fps = int((it-global_step)*n_env*n_step / n_sec)
-		avg_r = sum(avg_return) / disp_step
+		mean_total_reward, mean_len = runner.get_performance()
 
 		print("[{:5d} / {:5d}]".format(it, n_iter+global_step))
 		print("----------------------------------")
 		print("Total timestep = {:d}".format(it * mb_size))
 		print("Elapsed time = {:.2f} sec".format(n_sec))
 		print("FPS = {:d}".format(fps))
-		print("actor_loss = {:.6f}".format(cur_actor_loss))
-		print("critic_loss = {:.6f}".format(cur_critic_loss))
+		print("pg_loss = {:.6f}".format(cur_pg_loss))
+		print("v_loss = {:.6f}".format(cur_v_loss))
 		print("entropy = {:.6f}".format(cur_ent))
-		print("Avg return = {:.6f}".format(avg_r))
+		print("mean_total_reward = {:.6f}".format(mean_total_reward))
+		print("mean_len = {:.2f}".format(mean_len))
 		print()
 
-		return_fp.write("{:f}\n".format(avg_r))
+		return_fp.write("{:f}\n".format(mean_total_reward))
 		return_fp.flush()
-		avg_return = []
 
 	#Save
-	if it % save_step == 0:
+	if it % save_step == 0 and it > 1:
 		print("Saving the model ... ", end="")
 		saver.save(sess, save_dir+"/model.ckpt", global_step=it)
 		print("Done.")

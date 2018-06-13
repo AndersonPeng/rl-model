@@ -24,8 +24,8 @@ save_dir = "./save_" + env_id
 #----------------------------
 env = gym.make(env_id)
 if args.unwrap: env = env.unwrapped
-a_dim = env.action_space.n
 s_dim = env.observation_space.shape[0]
+a_dim = env.action_space.n
 
 
 #Create the model
@@ -54,7 +54,7 @@ for it in range(100):
 
 	while True:
 		env.render()
-		action, value = policy.step(np.expand_dims(ob.__array__(), axis=0))
+		action = policy.action_step(np.expand_dims(ob.__array__(), axis=0))
 		ob, reward, done, info = env.step(action[0])
 		total_reward += reward
 

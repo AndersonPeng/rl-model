@@ -213,6 +213,14 @@ class ClipRewardEnv(gym.RewardWrapper):
 		return np.sign(reward)
 
 
+class ModifiedRewardEnv(gym.RewardWrapper):
+	def reward(self, reward):
+		if reward == -100:
+			return -2
+		else:
+			return reward
+
+
 #Warp frames to 84x84
 class WarpFrame(gym.ObservationWrapper):
 	#--------------------------

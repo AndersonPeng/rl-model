@@ -56,7 +56,7 @@ for it in range(100):
 
 	while True:
 		env.render()
-		action, value = policy.step(np.expand_dims(ob.__array__(), axis=0))
+		action = policy.action_step(np.expand_dims(ob.__array__(), axis=0))
 		ob, reward, done, info = env.step(action[0])
 		total_reward += reward
 

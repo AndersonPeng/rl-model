@@ -1,5 +1,7 @@
 import tensorflow as tf
+import numpy as np
 import ops
+import distribs
 
 
 class PolicyModel(object):
@@ -10,7 +12,7 @@ class PolicyModel(object):
 		self.sess = sess
 
 		with tf.variable_scope(name, reuse=reuse):
-			#ob_ph: (mb_size, img_height, img_width, c_dim)
+			#ob_ph: (mb_size, s_dim)
 			self.ob_ph = tf.placeholder(tf.uint8, [None, img_height, img_width, c_dim], name="observation")
 			ob_normalized = tf.cast(self.ob_ph, tf.float32) / 255.0
 
@@ -30,25 +32,29 @@ class PolicyModel(object):
 			h = ops.fc(tf.reshape(h, [-1, h.shape[1]*h.shape[2]*h.shape[3]]), 512, name="fc1")
 			h = tf.nn.relu(h)
 
-			#pi:     (mb_size, a_dim)
-			#value:  (mb_size, 1)
-			pi = ops.fc(h, a_dim, name="fc_pi")
-			value = ops.fc(h, 1, name="fc_value")
-		
-		#value:  (mb_size)
-		#action: (mb_size)
+			with tf.variable_scope("actor", reuse=reuse):
+				#fc_logits: (mb_size, a_dim)
+				logits = ops.fc(h, a_dim, name="a_fc_logits")
+
+			with tf.variable_scope("critic", reuse=reuse):
+				#value: (mb_size, 1)
+				value = ops.fc(h, 1, name="c_fc_value")
+
+		#value:       (mb_size)
+		#action:      (mb_size)
+		#neg_logprob: (mb_size)
 		self.value = value[:, 0]
-		self.cat_dist = tf.distributions.Categorical(pi)
-		self.action = self.cat_dist.sample(1)[0]
-		self.pi = pi
+		self.distrib = distribs.CategoricalDistrib(logits)
+		self.action = self.distrib.sample()
+		self.neg_logprob = self.distrib.neg_logp(self.action)
 
 
 	#---------------------------
 	# Forward step
 	#---------------------------
 	def step(self, mb_obs):
-		a, v = self.sess.run([self.action, self.value], {self.ob_ph: mb_obs})
-		return a, v
+		a, v, nlp = self.sess.run([self.action, self.value, self.neg_logprob], {self.ob_ph: mb_obs})
+		return a, v, nlp
 
 
 	#---------------------------
@@ -57,3 +63,11 @@ class PolicyModel(object):
 	#---------------------------
 	def value_step(self, mb_obs):
 		return self.sess.run(self.value, {self.ob_ph: mb_obs})
+
+
+	#---------------------------
+	# Forward step for 
+	# sampling actions
+	#---------------------------
+	def action_step(self, mb_obs):
+		return self.sess.run(self.action, {self.ob_ph: mb_obs})

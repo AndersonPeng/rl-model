@@ -13,9 +13,10 @@ import argparse
 #-------------------------
 # Make an environment
 #-------------------------
-def make_env(rank, env_id="BreakoutNoFrameskip-v4", rand_seed=0):
+def make_env(rank, env_id="BreakoutNoFrameskip-v4", rand_seed=0, unwrap=False):
 	def _thunk():
 		env = gym.make(env_id)
+		if unwrap: env = env.unwrapped
 		env = env_wrapper.NoopResetEnv(env, noop_max=30)
 		env = env_wrapper.MaxAndSkipEnv(env, skip=4)
 		env.seed(rand_seed + rank)
@@ -37,27 +38,30 @@ def make_env(rank, env_id="BreakoutNoFrameskip-v4", rand_seed=0):
 parser = argparse.ArgumentParser()
 parser.add_argument("--env", default="BreakoutNoFrameskip-v4")
 parser.add_argument("--render", action="store_true")
+parser.add_argument("--unwrap", action="store_true")
 args = parser.parse_args()
 
 
 #Parameters
 #----------------------------
-n_env = 16
-n_step = 8
-mb_size = n_env*n_step
-sample_mb_size = 32
+n_env = 8
+n_step = 128
 n_stack = 4
+mb_size = n_env*n_step
+sample_mb_size = 64
+sample_n_mb = mb_size // sample_mb_size
+sample_n_epoch = 4
 gamma = 0.99
 clip_val = 0.2
-value_weight = 0.5
 ent_weight = 0.01
-max_grad_norm=0.5
-lr = 7e-4
+v_weight = 0.5
+max_grad_norm = 0.5
+lr = 3e-4
 lr_decay = 0.99
 eps = 1e-5
-n_iter = 300000
-disp_step = 100
-save_step = 1000
+n_iter = 30000
+disp_step = 10
+save_step = 100
 is_render = args.render
 env_id = args.env
 save_dir = "./save_" + env_id
@@ -65,55 +69,67 @@ save_dir = "./save_" + env_id
 
 #Create multiple environments
 #----------------------------
-env = MultiEnv([make_env(i, env_id=env_id) for i in range(n_env)])
-a_dim = env.ac_space.n
+env = MultiEnv([make_env(i, env_id=env_id, unwrap=args.unwrap) for i in range(n_env)])
 img_height, img_width, c_dim = env.ob_space.shape
+a_dim = env.ac_space.n
 runner = MultiEnvRunner(env, img_height, img_width, c_dim, n_step, n_stack, gamma)
 
 
 #Create the model
 #----------------------------
 config = tf.ConfigProto(
+	allow_soft_placement=True,
 	intra_op_parallelism_threads=n_env,
 	inter_op_parallelism_threads=n_env
 )
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
 policy = PolicyModel(sess, img_height, img_width, c_dim*n_stack, a_dim, "policy")
-policy_old = PolicyModel(sess, img_height, img_width, c_dim*n_stack, a_dim, "policy_old")
-
-t_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "policy/")
-t_var_old = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "policy_old/")
-assign_ops = [tf.assign(v_old, v) for v_old, v in zip(t_var_old, t_var)]
 
 
 #Placeholders
 #----------------------------
+#action_ph:          (mb_size)
+#old_neg_logprob_ph: (mb_size)
+#old_v_pred_ph:      (mb_size)
+#adv_ph:             (mb_size)
+#return_ph:          (mb_size)
 action_ph = tf.placeholder(tf.int32, [None], name="action")
+old_neg_logprob_ph = tf.placeholder(tf.float32, [None], name="old_negtive_log_prob")
+old_v_pred_ph = tf.placeholder(tf.float32, [None], name="old_value_pred")
 adv_ph = tf.placeholder(tf.float32, [None], name="advantage")
-discount_return_ph = tf.placeholder(tf.float32, [None], name="discounted_return")
+return_ph = tf.placeholder(tf.float32, [None], name="return")
 lr_ph = tf.placeholder(tf.float32, [])
+clip_ph = tf.placeholder(tf.float32, [])
 
 
 #Loss
 #----------------------------
-log_prob = policy.cat_dist.log_prob(action_ph)
-log_prob_old = policy_old.cat_dist.log_prob(action_ph)
-ratio = tf.exp(log_prob - log_prob_old)
-clipped_ratio = tf.clip_by_value(ratio, 1 - clip_val, 1 + clip_val)
+neg_logprob = policy.distrib.neg_logp(action_ph)
+ent = tf.reduce_mean(policy.distrib.entropy())
 
-clipped_loss = -tf.reduce_mean(tf.minimum(adv_ph * ratio, adv_ph * clipped_ratio))
-entropy_bonus = tf.reduce_mean(policy.cat_dist.entropy())
-value_loss = tf.reduce_mean(tf.squared_difference(tf.squeeze(policy.value), discount_return_ph) / 2.0)
-loss = clipped_loss - ent_weight*entropy_bonus + value_weight*value_loss
+v_pred = policy.value
+v_pred_clip = old_v_pred_ph + tf.clip_by_value(v_pred - old_v_pred_ph, -clip_ph, clip_ph)
+v_loss1 = tf.square(v_pred - return_ph)
+v_loss2 = tf.square(v_pred_clip - return_ph)
+v_loss = 0.5 * tf.reduce_mean(tf.maximum(v_loss1, v_loss2))
+
+ratio = tf.exp(old_neg_logprob_ph - neg_logprob)
+pg_loss1 = -adv_ph * ratio
+pg_loss2 = -adv_ph * tf.clip_by_value(ratio, 1.0 - clip_ph, 1.0 + clip_ph)
+pg_loss = tf.reduce_mean(tf.maximum(pg_loss1, pg_loss2))
+
+loss = pg_loss - ent_weight*ent + v_weight*v_loss
 
 
 #Optimizer
 #----------------------------
+t_var = tf.trainable_variables()
+
 grads = tf.gradients(loss, t_var)
-grads, grad_norm = tf.clip_by_global_norm(grads, max_grad_norm)
+grads, actor_grad_norm = tf.clip_by_global_norm(grads, max_grad_norm)
 grads = list(zip(grads, t_var))
-opt = tf.train.AdamOptimizer(lr_ph).apply_gradients(grads)
+opt = tf.train.AdamOptimizer(lr_ph, epsilon=eps).apply_gradients(grads)
 
 tf.contrib.slim.model_analyzer.analyze_vars(t_var, print_info=True)
 
@@ -137,6 +153,7 @@ else:
 	global_step = 0
 
 avg_return = []
+rand_idx = np.arange(mb_size)
 return_fp = open(os.path.join(save_dir, "avg_return.txt"), "a+")
 t_start = time.time()
 
@@ -144,51 +161,56 @@ for it in range(global_step, n_iter+global_step+1):
 	if is_render: env.render()
 
 	#Run the environment
-	mb_obs, mb_actions, mb_values, mb_discount_returns = runner.run(policy)
-	avg_return.append(np.mean(mb_discount_returns))
+	mb_obs, mb_actions, mb_neg_logprobs, mb_values, mb_returns = runner.run(policy)
 
 	#Train
-	sess.run(assign_ops)
-	for i in range(6):
-		sample_idx = np.random.randint(low=0, high=mb_size, size=sample_mb_size)
-		sampled_obs = np.take(mb_obs, indices=sample_idx, axis=0)
-		sampled_actions = np.take(mb_actions, indices=sample_idx, axis=0)
-		sampled_values = np.take(mb_values, indices=sample_idx, axis=0)
-		sampled_discount_returns = np.take(mb_discount_returns, indices=sample_idx, axis=0)
-		sampled_advs = sampled_discount_returns - sampled_values
+	for i in range(sample_n_epoch):
+		np.random.shuffle(rand_idx)
 
-		cur_clipped_loss, cur_ent, cur_value_loss, _ = sess.run([clipped_loss, entropy_bonus, value_loss, opt], feed_dict={
-			policy.ob_ph: sampled_obs,
-			policy_old.ob_ph: sampled_obs,
-			action_ph: sampled_actions,
-			adv_ph: sampled_advs,
-			discount_return_ph: sampled_discount_returns,
-			lr_ph: lr
-		})
+		for j in range(sample_n_mb):
+			sample_idx = rand_idx[j*sample_mb_size : (j+1)*sample_mb_size]
+			sample_obs = mb_obs[sample_idx]
+			sample_actions = mb_actions[sample_idx]
+			sample_values = mb_values[sample_idx]
+			sample_neg_logprobs = mb_neg_logprobs[sample_idx]
+			sample_returns = mb_returns[sample_idx]
+			sample_advs = sample_returns - sample_values
+			sample_advs = (sample_advs - sample_advs.mean()) / (sample_advs.std() + 1e-8)
+
+			cur_pg_loss, cur_v_loss, cur_ent, _ = sess.run([pg_loss, v_loss, ent, opt], feed_dict={
+				policy.ob_ph: sample_obs,
+				action_ph: sample_actions,
+				old_neg_logprob_ph: sample_neg_logprobs,
+				old_v_pred_ph: sample_values,
+				adv_ph: sample_advs,
+				return_ph: sample_returns,
+				lr_ph: lr,
+				clip_ph: clip_val
+			})
 
 	#Show the result
-	if it % disp_step == 0:
+	if it % disp_step == 0 and it > 1:
 		n_sec = time.time() - t_start
 		fps = int((it-global_step)*n_env*n_step / n_sec)
-		avg_r = sum(avg_return) / disp_step
+		mean_total_reward, mean_len = runner.get_performance()
 
 		print("[{:5d} / {:5d}]".format(it, n_iter+global_step))
 		print("----------------------------------")
 		print("Total timestep = {:d}".format(it * mb_size))
 		print("Elapsed time = {:.2f} sec".format(n_sec))
 		print("FPS = {:d}".format(fps))
-		print("clipped_loss = {:.6f}".format(cur_clipped_loss))
-		print("value_loss = {:.6f}".format(cur_value_loss))
+		print("pg_loss = {:.6f}".format(cur_pg_loss))
+		print("v_loss = {:.6f}".format(cur_v_loss))
 		print("entropy = {:.6f}".format(cur_ent))
-		print("Avg return = {:.6f}".format(avg_r))
+		print("mean_total_reward = {:.6f}".format(mean_total_reward))
+		print("mean_len = {:.2f}".format(mean_len))
 		print()
 
-		return_fp.write("{:f}\n".format(avg_r))
+		return_fp.write("{:f}\n".format(mean_total_reward))
 		return_fp.flush()
-		avg_return = []
 
 	#Save
-	if it % save_step == 0:
+	if it % save_step == 0 and it > 1:
 		print("Saving the model ... ", end="")
 		saver.save(sess, save_dir+"/model.ckpt", global_step=it)
 		print("Done.")
