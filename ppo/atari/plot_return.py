@@ -6,7 +6,7 @@ import argparse
 #Parse arguments
 #----------------------------
 parser = argparse.ArgumentParser()
-parser.add_argument("--env", default="CartPole-v0")
+parser.add_argument("--env", default="BreakoutNoFrameskip-v4")
 args = parser.parse_args()
 
 

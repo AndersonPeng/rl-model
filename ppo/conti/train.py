@@ -35,13 +35,14 @@ args = parser.parse_args()
 
 #Parameters
 #----------------------------
-n_env = 8
-n_step = 256
+n_env = 1
+n_step = 2048
 mb_size = n_env*n_step
 sample_mb_size = 64
 sample_n_mb = mb_size // sample_mb_size
-sample_n_epoch = 8
+sample_n_epoch = 10
 gamma = 0.99
+lamb = 0.95
 clip_val = 0.2
 ent_weight = 0.0
 v_weight = 0.5
@@ -64,7 +65,7 @@ a_dim = env.ac_space.shape[0]
 s_dim = env.ob_space.shape[0]
 a_low = env.ac_space.low[0]
 a_high = env.ac_space.high[0]
-runner = MultiEnvRunner(env, s_dim, a_dim, n_step, gamma)
+runner = MultiEnvRunner(env, s_dim, a_dim, n_step, gamma, lamb)
 
 
 #Create the model

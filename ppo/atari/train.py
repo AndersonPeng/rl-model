@@ -52,11 +52,12 @@ sample_mb_size = 64
 sample_n_mb = mb_size // sample_mb_size
 sample_n_epoch = 4
 gamma = 0.99
+lamb = 0.95
 clip_val = 0.2
 ent_weight = 0.01
 v_weight = 0.5
 max_grad_norm = 0.5
-lr = 3e-4
+lr = 2e-4
 lr_decay = 0.99
 eps = 1e-5
 n_iter = 30000
@@ -72,7 +73,7 @@ save_dir = "./save_" + env_id
 env = MultiEnv([make_env(i, env_id=env_id, unwrap=args.unwrap) for i in range(n_env)])
 img_height, img_width, c_dim = env.ob_space.shape
 a_dim = env.ac_space.n
-runner = MultiEnvRunner(env, img_height, img_width, c_dim, n_step, n_stack, gamma)
+runner = MultiEnvRunner(env, img_height, img_width, c_dim, n_step, n_stack, gamma, lamb)
 
 
 #Create the model
