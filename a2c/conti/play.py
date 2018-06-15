@@ -10,6 +10,7 @@ import argparse
 #----------------------------
 parser = argparse.ArgumentParser()
 parser.add_argument("--env", default="BipedalWalker-v2")
+parser.add_argument("--unwrap", action="store_true")
 args = parser.parse_args()
 
 
@@ -22,6 +23,7 @@ save_dir = "./save_" + env_id
 #Create the environment
 #----------------------------
 env = gym.make(env_id)
+if args.unwrap: env = env.unwrapped
 a_dim = env.action_space.shape[0]
 a_low = env.action_space.low[0]
 a_hight = env.action_space.high[0]
@@ -54,7 +56,7 @@ for it in range(100):
 
 	while True:
 		env.render()
-		action, value = policy.step(np.expand_dims(ob.__array__(), axis=0))
+		action = policy.action_step(np.expand_dims(ob.__array__(), axis=0))
 		ob, reward, done, info = env.step(action[0])
 		total_reward += reward
 

@@ -35,17 +35,17 @@ args = parser.parse_args()
 
 #Parameters
 #----------------------------
-n_env = 16
-n_step = 5
+n_env = 8
+n_step = 16
 mb_size = n_env*n_step
-gamma = 0.995
-ent_weight = 0.005
+gamma = 0.99
+ent_weight = 0.001
 max_grad_norm=0.5
-actor_lr = 2e-4
-critic_lr = 1e-4
+actor_lr = 3e-4
+critic_lr = 3e-4
 lr_decay = 0.99
 eps = 1e-5
-n_iter = 1000000
+n_iter = 300000
 disp_step = 100
 save_step = 1000
 is_render = args.render
@@ -71,7 +71,7 @@ config = tf.ConfigProto(
 )
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
-policy = PolicyModel(sess, s_dim, a_dim, a_low, a_high)
+policy = PolicyModel(sess, s_dim, a_dim, a_low, a_high, name="policy")
 
 
 #Placeholders
@@ -88,18 +88,18 @@ critic_lr_ph = tf.placeholder(tf.float32, [])
 
 #Loss
 #----------------------------
-log_prob = policy.normal_dist.log_prob(action_ph)
-pg_loss = -log_prob * tf.expand_dims(adv_ph, -1)
-entropy_bonus = policy.normal_dist.entropy()
-actor_loss = tf.reduce_mean(pg_loss - ent_weight*entropy_bonus)
+neg_logprob = policy.distrib.neg_logp(action_ph)
+pg_loss = tf.reduce_mean(neg_logprob * adv_ph)
+ent = tf.reduce_mean(policy.distrib.entropy())
+actor_loss = pg_loss - ent_weight*ent
 critic_loss = tf.reduce_mean(tf.squared_difference(tf.squeeze(policy.value), discount_return_ph) / 2.0)
 
 
 #Optimizer
 #----------------------------
 t_var = tf.trainable_variables()
-actor_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="actor")
-critic_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="critic")
+actor_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="policy/actor")
+critic_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="policy/critic")
 
 actor_grads = tf.gradients(actor_loss, actor_var)
 actor_grads, actor_grad_norm = tf.clip_by_global_norm(actor_grads, max_grad_norm)
@@ -132,7 +132,7 @@ if ckpt:
 else:
 	global_step = 0
 
-avg_return = []
+total_rewards = []
 return_fp = open(os.path.join(save_dir, "avg_return.txt"), "a+")
 t_start = time.time()
 
@@ -142,9 +142,8 @@ for it in range(global_step, n_iter+global_step+1):
 	#Train
 	mb_obs, mb_actions, mb_values, mb_discount_returns = runner.run(policy)
 	mb_advs = mb_discount_returns - mb_values
-	avg_return.append(np.mean(mb_discount_returns))
 
-	cur_actor_loss, cur_critic_loss, _, _ = sess.run([actor_loss, critic_loss, actor_opt, critic_opt], feed_dict={
+	cur_actor_loss, cur_critic_loss, cur_ent, _, _ = sess.run([actor_loss, critic_loss, ent, actor_opt, critic_opt], feed_dict={
 		policy.ob_ph: mb_obs,
 		action_ph: mb_actions,
 		adv_ph: mb_advs,
@@ -157,7 +156,8 @@ for it in range(global_step, n_iter+global_step+1):
 	if it % disp_step == 0 and it > global_step:
 		n_sec = time.time() - t_start
 		fps = int((it-global_step)*n_env*n_step / n_sec)
-		avg_r = sum(avg_return) / disp_step
+		mean_total_reward, mean_len = runner.get_performance()
+		total_rewards.append(mean_total_reward)
 
 		print("[{:5d} / {:5d}]".format(it, n_iter+global_step))
 		print("----------------------------------")
@@ -166,17 +166,20 @@ for it in range(global_step, n_iter+global_step+1):
 		print("FPS = {:d}".format(fps))
 		print("actor_loss = {:.6f}".format(cur_actor_loss))
 		print("critic_loss = {:.6f}".format(cur_critic_loss))
-		print("Avg return = {:.6f}".format(avg_r))
+		print("entropy = {:.6f}".format(cur_ent))
+		print("mean_total_reward = {:.6f}".format(mean_total_reward))
+		print("mean_len = {:.2f}".format(mean_len))
 		print()
 
-		return_fp.write("{:f}\n".format(avg_r))
-		return_fp.flush()
-		avg_return = []
-
 	#Save
-	if it % save_step == 0:
+	if it % save_step == 0 and it > global_step:
 		print("Saving the model ... ", end="")
 		saver.save(sess, save_dir+"/model.ckpt", global_step=it)
+
+		for r in total_rewards:
+			return_fp.write("{:f}\n".format(r))
+		return_fp.flush()
+		total_rewards = []
 		print("Done.")
 		print()
 

@@ -1,4 +1,5 @@
 import numpy as np
+from collections import deque
 
 
 #--------------------------
@@ -28,8 +29,17 @@ class MultiEnvRunner:
 		self.s_dim = s_dim
 		self.a_dim = a_dim
 
-		#obs: (n_env, s_dim)
-		self.obs = self.env.reset()
+		#obs:   (n_env, s_dim)
+		#dones: (n_env)
+		self.obs = np.zeros((self.n_env, self.s_dim), dtype=np.float32)
+		self.obs[:] = self.env.reset()
+		self.dones = [False for _ in range(self.n_env)]
+
+		#Reward & length recorder
+		self.total_rewards = np.zeros((self.n_env), dtype=np.float32)
+		self.total_len = np.zeros((self.n_env), dtype=np.int32)
+		self.reward_buf = deque(maxlen=100)
+		self.len_buf = deque(maxlen=100)
 
 
 	#--------------------------
@@ -41,25 +51,24 @@ class MultiEnvRunner:
 		#1. Run n steps
 		#-------------------------------------
 		for step in range(self.n_step):
-			#actions: (n_env)
-			#values:  (n_env)
-			#obs: (n_env, s_dim)
-			actions, values = policy.step(self.obs)
+			#obs:          (n_env, s_dim)
+			#actions:      (n_env, a_dim)
+			#values:       (n_env)
+			actions, values, _ = policy.step(self.obs)
 			mb_obs.append(np.copy(self.obs))
-			mb_values.append(values)
 			mb_actions.append(actions)
-			
-			#obs:     (n_env, s_dim)
+			mb_values.append(values)
+			mb_dones.append(self.dones)
+
 			#rewards: (n_env)
 			#dones:   (n_env)
-			self.obs, rewards, dones, info = self.env.step(actions)
+			self.obs[:], rewards, self.dones, infos = self.env.step(actions)
 			mb_rewards.append(rewards)
-			mb_dones.append(dones)
 
 		#last_values: (n_env)
 		last_values = policy.value_step(self.obs).tolist()
 
-		#2. Convert to np array & compute returns
+		#2. Convert to np array
 		#-------------------------------------
 		#mb_obs:     (n_env, n_step, s_dim)
 		#mb_actions: (n_env, n_step, a_dim)
@@ -72,6 +81,10 @@ class MultiEnvRunner:
 		mb_rewards = np.asarray(mb_rewards, dtype=np.float32).swapaxes(1, 0)
 		mb_dones = np.asarray(mb_dones, dtype=np.bool).swapaxes(1, 0)
 
+		self.record(mb_rewards, mb_dones)
+
+		#3. Compute returns
+		#-------------------------------------
 		for i, (rewards, dones, value) in enumerate(zip(mb_rewards, mb_dones, last_values)):
 			#The last step is not done, add the last value
 			if dones[-1] == False:
@@ -87,3 +100,36 @@ class MultiEnvRunner:
 		#mb_discount_returns: (n_env*n_step)
 		return mb_obs.reshape(self.n_env*self.n_step, self.s_dim), mb_actions.reshape(self.n_env*self.n_step, self.a_dim), \
 				mb_values.flatten(), np.asarray(mb_discount_returns, dtype=np.float32).flatten()
+
+
+	#--------------------------
+	# Record reward & length
+	#--------------------------
+	def record(self, mb_rewards, mb_dones):
+		for i in range(self.n_env):
+			for j in range(self.n_step):
+				if mb_dones[i, j] == True:
+					self.reward_buf.append(self.total_rewards[i])
+					self.len_buf.append(self.total_len[i])
+					self.total_rewards[i] = mb_rewards[i, j]
+					self.total_len[i] = 1
+				else:
+					self.total_rewards[i] += mb_rewards[i, j]
+					self.total_len[i] += 1
+
+
+	#--------------------------
+	# Get performance
+	#--------------------------
+	def get_performance(self):
+		if len(self.reward_buf) == 0:
+			mean_total_reward = 0
+		else:
+			mean_total_reward = np.mean(self.reward_buf)
+
+		if len(self.len_buf) == 0:
+			mean_len = 0
+		else:
+			mean_len = np.mean(self.len_buf)
+
+		return mean_total_reward, mean_len

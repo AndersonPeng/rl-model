@@ -125,6 +125,7 @@ class MultiEnvRunner:
 					self.total_rewards[i] += mb_rewards[j, i]
 					self.total_len[i] += 1
 
+
 	#--------------------------
 	# Get performance
 	#--------------------------

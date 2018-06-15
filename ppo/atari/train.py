@@ -153,7 +153,7 @@ if ckpt:
 else:
 	global_step = 0
 
-avg_return = []
+total_rewards = []
 rand_idx = np.arange(mb_size)
 return_fp = open(os.path.join(save_dir, "avg_return.txt"), "a+")
 t_start = time.time()
@@ -190,10 +190,11 @@ for it in range(global_step, n_iter+global_step+1):
 			})
 
 	#Show the result
-	if it % disp_step == 0 and it > 1:
+	if it % disp_step == 0 and it > global_step:
 		n_sec = time.time() - t_start
 		fps = int((it-global_step)*n_env*n_step / n_sec)
 		mean_total_reward, mean_len = runner.get_performance()
+		total_rewards.append(mean_total_reward)
 
 		print("[{:5d} / {:5d}]".format(it, n_iter+global_step))
 		print("----------------------------------")
@@ -207,13 +208,15 @@ for it in range(global_step, n_iter+global_step+1):
 		print("mean_len = {:.2f}".format(mean_len))
 		print()
 
-		return_fp.write("{:f}\n".format(mean_total_reward))
-		return_fp.flush()
-
 	#Save
-	if it % save_step == 0 and it > 1:
+	if it % save_step == 0 and it > global_step:
 		print("Saving the model ... ", end="")
 		saver.save(sess, save_dir+"/model.ckpt", global_step=it)
+
+		for r in total_rewards:
+			return_fp.write("{:f}\n".format(r))
+		return_fp.flush()
+		total_rewards = []
 		print("Done.")
 		print()
 

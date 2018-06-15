@@ -130,7 +130,7 @@ if ckpt:
 else:
 	global_step = 0
 
-avg_return = []
+total_rewards = []
 return_fp = open(os.path.join(save_dir, "avg_return.txt"), "a+")
 t_start = time.time()
 
@@ -139,8 +139,6 @@ for it in range(global_step, n_iter+global_step+1):
 
 	#Run the environment
 	mb_obs, mb_actions, mb_values, mb_discount_returns = runner.run(policy)
-	avg_return.append(np.mean(mb_discount_returns))
-
 	mb_advs = mb_discount_returns - mb_values
 
 	#Train
@@ -157,7 +155,8 @@ for it in range(global_step, n_iter+global_step+1):
 	if it % disp_step == 0 and it > global_step:
 		n_sec = time.time() - t_start
 		fps = int((it-global_step)*n_env*n_step / n_sec)
-		avg_r = sum(avg_return) / disp_step
+		mean_total_reward, mean_len = runner.get_performance()
+		total_rewards.append(mean_total_reward)
 
 		print("[{:5d} / {:5d}]".format(it, n_iter+global_step))
 		print("----------------------------------")
@@ -167,17 +166,19 @@ for it in range(global_step, n_iter+global_step+1):
 		print("actor_loss = {:.6f}".format(cur_actor_loss))
 		print("critic_loss = {:.6f}".format(cur_critic_loss))
 		print("entropy = {:.6f}".format(cur_ent))
-		print("Avg return = {:.6f}".format(avg_r))
+		print("mean_total_reward = {:.6f}".format(mean_total_reward))
+		print("mean_len = {:.2f}".format(mean_len))
 		print()
-
-		return_fp.write("{:f}\n".format(avg_r))
-		return_fp.flush()
-		avg_return = []
 
 	#Save
 	if it % save_step == 0:
 		print("Saving the model ... ", end="")
 		saver.save(sess, save_dir+"/model.ckpt", global_step=it)
+
+		for r in total_rewards:
+			return_fp.write("{:f}\n".format(r))
+		return_fp.flush()
+		total_rewards = []
 		print("Done.")
 		print()
 

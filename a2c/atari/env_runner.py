@@ -1,4 +1,5 @@
 import numpy as np
+from collections import deque
 
 
 #--------------------------
@@ -33,6 +34,12 @@ class MultiEnvRunner:
 		#obs: (n_env, img_height, img_width, c_dim*n_stack)
 		self.stacked_obs = np.zeros((self.n_env, img_height, img_width, c_dim*n_stack), dtype=np.uint8)
 		self.update_stacked_obs(self.env.reset())
+
+		#Reward & length recorder
+		self.total_rewards = np.zeros((self.n_env), dtype=np.float32)
+		self.total_len = np.zeros((self.n_env), dtype=np.int32)
+		self.reward_buf = deque(maxlen=100)
+		self.len_buf = deque(maxlen=100)
 
 
 	#--------------------------
@@ -76,7 +83,7 @@ class MultiEnvRunner:
 		#last_values: (n_env)
 		last_values = policy.value_step(self.stacked_obs).tolist()
 
-		#2. Convert to np array & compute returns
+		#2. Convert to np array
 		#-------------------------------------
 		#mb_obs:     (n_env, n_step, img_height, img_width, c_dim*n_stack)
 		#mb_actions: (n_env, n_step)
@@ -89,6 +96,10 @@ class MultiEnvRunner:
 		mb_rewards = np.asarray(mb_rewards, dtype=np.float32).swapaxes(1, 0)
 		mb_dones = np.asarray(mb_dones, dtype=np.bool).swapaxes(1, 0)
 
+		self.record(mb_rewards, mb_dones)
+
+		#3. Compute returns
+		#-------------------------------------
 		for i, (rewards, dones, value) in enumerate(zip(mb_rewards, mb_dones, last_values)):
 			#The last step is not done, add the last value
 			if dones[-1] == False:
@@ -104,3 +115,35 @@ class MultiEnvRunner:
 		#mb_discount_returns: (n_env*n_step)
 		return mb_obs.reshape(self.n_env*self.n_step, self.img_height, self.img_width, self.c_dim*self.n_stack), \
 				mb_actions.flatten(), mb_values.flatten(), np.asarray(mb_discount_returns, dtype=np.float32).flatten()
+
+
+	#--------------------------
+	# Record reward & length
+	#--------------------------
+	def record(self, mb_rewards, mb_dones):
+		for i in range(self.n_env):
+			for j in range(self.n_step):
+				if mb_dones[i, j] == True:
+					self.reward_buf.append(self.total_rewards[i])
+					self.len_buf.append(self.total_len[i])
+					self.total_rewards[i] = mb_rewards[i, j]
+					self.total_len[i] = 1
+				else:
+					self.total_rewards[i] += mb_rewards[i, j]
+					self.total_len[i] += 1
+
+	#--------------------------
+	# Get performance
+	#--------------------------
+	def get_performance(self):
+		if len(self.reward_buf) == 0:
+			mean_total_reward = 0
+		else:
+			mean_total_reward = np.mean(self.reward_buf)
+
+		if len(self.len_buf) == 0:
+			mean_len = 0
+		else:
+			mean_len = np.mean(self.len_buf)
+
+		return mean_total_reward, mean_len
