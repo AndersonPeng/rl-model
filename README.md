@@ -6,9 +6,9 @@ The implementation is based on [OpenAI Baselines](https://github.com/openai/base
 
 ## Prerequisite
 
-- tensorflow-1.8.0
-- gym-0.10.5
-- mujoco-py-1.50.1 (optional)
+- [tensorflow-1.8.0](https://github.com/tensorflow/tensorflow)
+- [gym-0.10.5](https://github.com/openai/gym)
+- [mujoco-py-1.50.1](https://github.com/openai/mujoco-py) (optional)
 
 <br>
 
@@ -19,7 +19,7 @@ The implementation is based on [OpenAI Baselines](https://github.com/openai/base
 
 <br>
 
-## Experiment Results
+## Experimental Results
 
 ### Discrete:
 
