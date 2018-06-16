@@ -78,6 +78,14 @@ A2C|PPO
 
 ### Continuous:
 
+- BipedalWalker-v2
+
+A2C|PPO
+-|-
+![](./fig/BipedalWalker-v2-a2c.png)|![](./fig/BipedalWalker-v2-ppo.png)
+
+<br>
+
 - InvertedPendulum-v2
 
 A2C|PPO
@@ -94,11 +102,11 @@ A2C|PPO
 
 <br>
 
-- BipedalWalker-v2
+- Hopper-v2
 
 A2C|PPO
 -|-
-![](./fig/BipedalWalker-v2-a2c.png)|![](./fig/BipedalWalker-v2-ppo.png)
+![](./fig/Hopper-v2-a2c.png)|![](./fig/Hopper-v2-ppo.png)
 
 <br>
 
@@ -110,8 +118,8 @@ A2C|PPO
 
 <br>
 
-- Hopper-v2
+- Walker2d-v2
 
 A2C|PPO
 -|-
-![](./fig/Hopper-v2-a2c.png)|![](./fig/Hopper-v2-ppo.png)
+![](./fig/Walker2d-v2-a2c.png)|![](./fig/Walker2d-v2-ppo.png)
