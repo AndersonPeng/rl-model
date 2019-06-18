@@ -59,7 +59,18 @@ save_step = 100
 is_render = args.render
 env_id = args.env
 save_dir = "./save_" + env_id
-expert_traj_dir = "../expert_ppo/conti/save_" + env_id
+expert_traj_dir = "../../ppo/conti/save_" + env_id
+
+
+#Load the expert trajectories
+#----------------------------
+expert_traj_filename = os.path.join(expert_traj_dir, "traj.pkl")
+
+if os.path.exists(expert_traj_filename):
+	expert_traj = pickle.load(open(expert_traj_filename, "rb"))
+else:
+	print("ERROR: No expert trajectory file found")
+	sys.exit(1)
 
 
 #Create multiple environments
@@ -167,18 +178,10 @@ if ckpt:
 else:
 	global_step = 0
 
-#Load the expert trajectories
-expert_traj_filename = os.path.join(expert_traj_dir, "traj.pkl")
-
-if os.path.exists(expert_traj_filename):
-	expert_traj = pickle.load(open(expert_traj_filename, "rb"))
-else:
-	print("ERROR: No expert trajectory file found")
-	sys.exit(1)
-
 expert_traj = np.concatenate([np.array(t, dtype=np.float32) for t in expert_traj], 0)
 np.random.shuffle(expert_traj)
-total_rewards = []
+mean_returns = []
+std_returns  = []
 rand_idx = np.arange(mb_size)
 return_fp = open(os.path.join(save_dir, "avg_return.txt"), "a+")
 t_start = time.time()
@@ -235,8 +238,9 @@ for it in range(global_step, n_iter+global_step+1):
 	if it % disp_step == 0 and it > global_step:
 		n_sec = time.time() - t_start
 		fps = int((it-global_step)*n_env*n_step / n_sec)
-		mean_total_reward, mean_len = runner.get_performance()
-		total_rewards.append(mean_total_reward)
+		mean_return, std_return, mean_len = runner.get_performance()
+		mean_returns.append(mean_return)
+		std_returns.append(std_return)
 
 		print("[{:5d} / {:5d}]".format(it, n_iter+global_step))
 		print("----------------------------------")
@@ -247,7 +251,7 @@ for it in range(global_step, n_iter+global_step+1):
 		print("v_loss = {:.6f}".format(cur_v_loss))
 		print("dis_loss = {:.6f}".format(cur_dis_loss))
 		print("entropy = {:.6f}".format(cur_ent))
-		print("mean_total_reward = {:.6f}".format(mean_total_reward))
+		print("mean_total_reward = {:.6f}".format(mean_return))
 		print("mean_len = {:.2f}".format(mean_len))
 		print()
 
@@ -256,10 +260,12 @@ for it in range(global_step, n_iter+global_step+1):
 		print("Saving the model ... ", end="")
 		saver.save(sess, save_dir+"/model.ckpt", global_step=it)
 
-		for r in total_rewards:
-			return_fp.write("{:f}\n".format(r))
+		for mean, std in zip(mean_returns, std_returns):
+			return_fp.write("{:f},{:f}\n".format(mean, std))
+		
 		return_fp.flush()
-		total_rewards = []
+		mean_returns.clear()
+		std_returns.clear()
 		print("Done.")
 		print()
 

@@ -1,6 +1,9 @@
+import sys
+sys.path.insert(0, "../..")
+
+from utils import ops
 import tensorflow as tf
 import numpy as np
-import ops
 
 
 class DiscriminatorModel(object):

@@ -28,7 +28,18 @@ disp_step = 1000
 save_step = 10000
 env_id = args.env
 save_dir = "./save_" + env_id
-expert_traj_dir = "../expert_ppo/discrete/save_" + env_id
+expert_traj_dir = "../../ppo/discrete/save_" + env_id
+
+
+#Load the expert trajectories
+#----------------------------
+expert_traj_filename = os.path.join(expert_traj_dir, "traj.pkl")
+
+if os.path.exists(expert_traj_filename):
+	expert_traj = pickle.load(open(expert_traj_filename, "rb"))
+else:
+	print("ERROR: No expert trajectory file found")
+	sys.exit(1)
 
 
 #Create the environment
@@ -85,15 +96,6 @@ if ckpt:
 	print("Done.")
 else:
 	global_step = 0
-
-#Load the expert trajectories
-expert_traj_filename = os.path.join(expert_traj_dir, "traj.pkl")
-
-if os.path.exists(expert_traj_filename):
-	expert_traj = pickle.load(open(expert_traj_filename, "rb"))
-else:
-	print("ERROR: No expert trajectory file found")
-	sys.exit(1)
 
 expert_traj = np.concatenate([np.array(t, dtype=np.float32) for t in expert_traj], 0)
 np.random.shuffle(expert_traj)

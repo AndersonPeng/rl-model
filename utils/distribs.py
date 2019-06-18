@@ -23,9 +23,9 @@ class CategoricalDistrib():
 	# Entropy
 	#--------------------------
 	def entropy(self):
-		a0 = self.logits - tf.reduce_max(self.logits, axis=-1, keepdims=True)
+		a0 = self.logits - tf.reduce_max(self.logits, axis=-1, keep_dims=True)
 		ea0 = tf.exp(a0)
-		z0 = tf.reduce_sum(ea0, axis=-1, keepdims=True)
+		z0 = tf.reduce_sum(ea0, axis=-1, keep_dims=True)
 		p0 = ea0 / z0
 		return tf.reduce_sum(p0 * (tf.log(z0) - a0), axis=-1)
 
@@ -54,7 +54,7 @@ class DiagGaussianDistrib():
 	#--------------------------
 	def neg_logp(self, x):
 		return 0.5 * tf.reduce_sum(tf.square((x - self.mean) / self.std), axis=-1) \
-				+ 0.5 * np.log(2.0 * np.pi) * tf.to_float(tf.shape(x)[-1]) \
+				+ 0.5 * np.log(2.0 * np.pi) * tf.cast(tf.shape(x)[-1], tf.float32) \
 				+ tf.reduce_sum(self.logstd, axis=-1)
 
 

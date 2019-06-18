@@ -1,7 +1,9 @@
+import sys
+sys.path.insert(0, "../..")
+
+from utils import ops, distribs
 import tensorflow as tf
 import numpy as np
-import ops
-import distribs
 
 
 class PolicyModel(object):

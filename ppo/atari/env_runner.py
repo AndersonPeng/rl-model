@@ -148,13 +148,15 @@ class MultiEnvRunner:
 	#--------------------------
 	def get_performance(self):
 		if len(self.reward_buf) == 0:
-			mean_total_reward = 0
+			mean_return = 0
+			std_return  = 0
 		else:
-			mean_total_reward = np.mean(self.reward_buf)
+			mean_return = np.mean(self.reward_buf)
+			std_return  = np.std(self.reward_buf)
 
 		if len(self.len_buf) == 0:
 			mean_len = 0
 		else:
 			mean_len = np.mean(self.len_buf)
 
-		return mean_total_reward, mean_len
+		return mean_return, std_return, mean_len
