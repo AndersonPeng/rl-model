@@ -61,4 +61,4 @@ class DiscriminatorModel(object):
 	# Forward step
 	#---------------------------
 	def step(self, traj_fake):
-		return self.sess.run([self.prob_fake], feed_dict={self.traj_fake_ph: traj_fake})
+		return self.sess.run(self.prob_fake, feed_dict={self.traj_fake_ph: traj_fake})

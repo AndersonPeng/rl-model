@@ -131,13 +131,13 @@ loss = pg_loss - ent_weight*ent + v_weight*v_loss
 
 #GAIL Loss
 #----------------------------
-dis_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-	logits=dis.logit_fake,
-	labels=tf.ones_like(dis.prob_fake)
-))
 dis_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
 	logits=dis.logit_real,
-	labels=tf.zeros_like(dis.prob_real)
+	labels=tf.ones_like(dis.prob_real)
+))
+dis_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+	logits=dis.logit_fake,
+	labels=tf.zeros_like(dis.prob_fake)
 ))
 dis_loss = dis_loss_fake + dis_loss_real
 

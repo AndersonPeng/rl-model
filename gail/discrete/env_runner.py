@@ -83,7 +83,7 @@ class MultiEnvRunner:
 			for k in range(self.n_env):
 				mb_actions_onehot[j*self.n_env + k, mb_actions[j, k]] = 1
 
-		mb_rewards = -np.log(dis.step(np.concatenate([
+		mb_rewards = -np.log(1e-8 + 1. - dis.step(np.concatenate([
 			mb_obs.reshape(self.n_step*self.n_env, -1), 
 			mb_actions_onehot
 		], 1))).reshape(self.n_step, self.n_env)
