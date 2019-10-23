@@ -44,7 +44,6 @@ sample_n_epoch = 10
 gamma = 0.99
 lamb = 0.95
 clip_val = 0.2
-ent_weight = 0.0
 v_weight = 0.5
 max_grad_norm = 0.5
 lr = 3e-4
@@ -68,18 +67,6 @@ a_high = env.ac_space.high[0]
 runner = MultiEnvRunner(env, s_dim, a_dim, n_step, gamma, lamb)
 
 
-#Create the model
-#----------------------------
-config = tf.ConfigProto(
-	allow_soft_placement=True,
-	intra_op_parallelism_threads=n_env,
-	inter_op_parallelism_threads=n_env
-)
-config.gpu_options.allow_growth = True
-sess = tf.Session(config=config)
-policy = PolicyModel(sess, s_dim, a_dim, a_low, a_high, "policy")
-
-
 #Placeholders
 #----------------------------
 #action_ph:          (mb_size, a_dim)
@@ -94,12 +81,24 @@ adv_ph = tf.placeholder(tf.float32, [None], name="advantage")
 return_ph = tf.placeholder(tf.float32, [None], name="return")
 lr_ph = tf.placeholder(tf.float32, [])
 clip_ph = tf.placeholder(tf.float32, [])
+logstd_ph = tf.placeholder(tf.float32, [1, a_dim], name="logstd")
+
+
+#Create the model
+#----------------------------
+config = tf.ConfigProto(
+	allow_soft_placement=True,
+	intra_op_parallelism_threads=n_env,
+	inter_op_parallelism_threads=n_env
+)
+config.gpu_options.allow_growth = True
+sess = tf.Session(config=config)
+policy = PolicyModel(sess, logstd_ph, s_dim, a_dim, a_low, a_high, "policy")
 
 
 #Loss
 #----------------------------
 neg_logprob = policy.distrib.neg_logp(action_ph)
-ent = tf.reduce_mean(policy.distrib.entropy())
 
 v_pred = policy.value
 v_pred_clip = old_v_pred_ph + tf.clip_by_value(v_pred - old_v_pred_ph, -clip_ph, clip_ph)
@@ -112,7 +111,7 @@ pg_loss1 = -adv_ph * ratio
 pg_loss2 = -adv_ph * tf.clip_by_value(ratio, 1.0 - clip_ph, 1.0 + clip_ph)
 pg_loss = tf.reduce_mean(tf.maximum(pg_loss1, pg_loss2))
 
-loss = pg_loss - ent_weight*ent + v_weight*v_loss
+loss = pg_loss + v_weight*v_loss
 
 
 #Optimizer
@@ -149,6 +148,7 @@ mean_returns = []
 std_returns  = []
 rand_idx = np.arange(mb_size)
 return_fp = open(os.path.join(save_dir, "avg_return.txt"), "a+")
+logstd = np.zeros((1, a_dim), dtype=np.float32)
 t_start = time.time()
 
 for it in range(global_step, n_iter+global_step+1):
@@ -171,7 +171,7 @@ for it in range(global_step, n_iter+global_step+1):
 			sample_advs = sample_returns - sample_values
 			sample_advs = (sample_advs - sample_advs.mean()) / (sample_advs.std() + 1e-8)
 
-			cur_pg_loss, cur_v_loss, cur_ent, _ = sess.run([pg_loss, v_loss, ent, opt], feed_dict={
+			cur_pg_loss, cur_v_loss, _ = sess.run([pg_loss, v_loss, opt], feed_dict={
 				policy.ob_ph: sample_obs,
 				action_ph: sample_actions,
 				old_neg_logprob_ph: sample_neg_logprobs,
@@ -179,7 +179,8 @@ for it in range(global_step, n_iter+global_step+1):
 				adv_ph: sample_advs,
 				return_ph: sample_returns,
 				lr_ph: lr,
-				clip_ph: clip_val
+				clip_ph: clip_val,
+				logstd_ph: logstd
 			})
 
 	#Show the result
@@ -197,9 +198,9 @@ for it in range(global_step, n_iter+global_step+1):
 		print("FPS = {:d}".format(fps))
 		print("pg_loss = {:.6f}".format(cur_pg_loss))
 		print("v_loss = {:.6f}".format(cur_v_loss))
-		print("entropy = {:.6f}".format(cur_ent))
 		print("mean_total_reward = {:.6f}".format(mean_return))
 		print("mean_len = {:.2f}".format(mean_len))
+		print("logstd = {}".format(logstd[0]))
 		print()
 
 	#Save

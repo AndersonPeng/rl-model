@@ -15,6 +15,7 @@ class MultiEnvRunner:
 		self.lamb = lamb
 		self.s_dim = s_dim
 		self.a_dim = a_dim
+		self.logstd = np.zeros((1, a_dim), dtype=np.float32)
 
 		#obs:   (n_env, s_dim)
 		#dones: (n_env)
@@ -47,7 +48,7 @@ class MultiEnvRunner:
 			#actions:      (n_env, a_dim)
 			#neg_logprobs: (n_env)
 			#values:       (n_env)
-			actions, values, neg_logprobs = policy.step(self.obs)
+			actions, values, neg_logprobs = policy.step(self.obs, self.logstd)
 			mb_obs.append(np.copy(self.obs))
 			mb_actions.append(actions)
 			mb_values.append(values)

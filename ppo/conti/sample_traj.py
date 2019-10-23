@@ -30,8 +30,13 @@ env = gym.make(env_id)
 if args.unwrap: env = env.unwrapped
 a_dim = env.action_space.shape[0]
 a_low = env.action_space.low[0]
-a_hight = env.action_space.high[0]
+a_high = env.action_space.high[0]
 s_dim = env.observation_space.shape[0]
+
+
+#Placeholders
+#----------------------------
+logstd_ph = tf.placeholder(tf.float32, [1, a_dim], name="logstd")
 
 
 #Create the model
@@ -39,12 +44,14 @@ s_dim = env.observation_space.shape[0]
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
-policy = PolicyModel(sess, s_dim, a_dim, a_low, a_hight)
+policy = PolicyModel(sess, logstd_ph, s_dim, a_dim, a_low, a_high)
 
 
 #Start playing
 #----------------------------
 sess.run(tf.global_variables_initializer())
+logstd = np.zeros((1, a_dim), dtype=np.float32)
+logstd.fill(-4.0)
 
 #Load the model
 saver = tf.train.Saver(max_to_keep=2)
@@ -63,7 +70,7 @@ for i in range(n_episode):
 
 	while True:
 		if is_render: env.render()
-		action = policy.action_step(np.expand_dims(ob.__array__(), axis=0))
+		action = policy.action_step(np.expand_dims(ob.__array__(), axis=0), logstd)
 		traj[i].append(np.hstack([ob, action[0]]))
 
 		ob, reward, done, info = env.step(action[0])

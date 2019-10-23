@@ -30,17 +30,23 @@ a_hight = env.action_space.high[0]
 s_dim = env.observation_space.shape[0]
 
 
+#Placeholders
+#----------------------------
+logstd_ph = tf.placeholder(tf.float32, [1, a_dim], name="logstd")
+
+
 #Create the model
 #----------------------------
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
-policy = PolicyModel(sess, s_dim, a_dim, a_low, a_hight)
+policy = PolicyModel(sess, logstd_ph, s_dim, a_dim, a_low, a_hight)
 
 
 #Start playing
 #----------------------------
 sess.run(tf.global_variables_initializer())
+logstd = np.zeros((1, a_dim), dtype=np.float32)
 
 #Load the model
 saver = tf.train.Saver(max_to_keep=2)
@@ -56,7 +62,7 @@ for it in range(100):
 
 	while True:
 		env.render()
-		action = policy.action_step(np.expand_dims(ob.__array__(), axis=0))
+		action = policy.action_step(np.expand_dims(ob.__array__(), axis=0), logstd)
 		ob, reward, done, info = env.step(action[0])
 		total_reward += reward
 
