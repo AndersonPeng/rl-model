@@ -45,7 +45,7 @@ class MultiEnvRunner:
 	#--------------------------
 	# Get a batch for n steps
 	#--------------------------
-	def run(self, policy):
+	def run(self, policy, logstd):
 		mb_obs, mb_actions, mb_values, mb_rewards, mb_dones, mb_discount_returns = [], [], [], [], [], []
 
 		#1. Run n steps
@@ -54,7 +54,7 @@ class MultiEnvRunner:
 			#obs:          (n_env, s_dim)
 			#actions:      (n_env, a_dim)
 			#values:       (n_env)
-			actions, values, _ = policy.step(self.obs)
+			actions, values, _ = policy.step(self.obs, logstd)
 			mb_obs.append(np.copy(self.obs))
 			mb_actions.append(actions)
 			mb_values.append(values)

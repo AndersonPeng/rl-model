@@ -50,13 +50,16 @@ if ckpt:
 	saver.restore(sess, ckpt.model_checkpoint_path)
 	print("Done.")
 
+logstd = np.zeros((1, a_dim), dtype=np.float32)
+logstd.fill(-6.0)
+
 for it in range(100):
 	ob = env.reset()
 	total_reward = 0
 
 	while True:
 		env.render()
-		action = policy.action_step(np.expand_dims(ob.__array__(), axis=0))
+		action = policy.action_step(np.expand_dims(ob.__array__(), axis=0), logstd)
 		ob, reward, done, info = env.step(action[0])
 		total_reward += reward
 

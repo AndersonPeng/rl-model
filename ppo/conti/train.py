@@ -49,7 +49,7 @@ max_grad_norm = 0.5
 lr = 3e-4
 lr_decay = 0.99
 eps = 1e-5
-n_iter = 30000
+n_iter = 5000
 disp_step = 10
 save_step = 100
 is_render = args.render
@@ -81,7 +81,6 @@ adv_ph = tf.placeholder(tf.float32, [None], name="advantage")
 return_ph = tf.placeholder(tf.float32, [None], name="return")
 lr_ph = tf.placeholder(tf.float32, [])
 clip_ph = tf.placeholder(tf.float32, [])
-logstd_ph = tf.placeholder(tf.float32, [1, a_dim], name="logstd")
 
 
 #Create the model
@@ -93,7 +92,7 @@ config = tf.ConfigProto(
 )
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
-policy = PolicyModel(sess, logstd_ph, s_dim, a_dim, a_low, a_high, "policy")
+policy = PolicyModel(sess, s_dim, a_dim, a_low, a_high, "policy")
 
 
 #Loss
@@ -149,13 +148,16 @@ std_returns  = []
 rand_idx = np.arange(mb_size)
 return_fp = open(os.path.join(save_dir, "avg_return.txt"), "a+")
 logstd = np.zeros((1, a_dim), dtype=np.float32)
+logstd.fill(0.0)
 t_start = time.time()
 
-for it in range(global_step, n_iter+global_step+1):
+for it in range(global_step, n_iter):
 	if is_render: env.render()
 
+	logstd_cur = logstd - global_step // 1000
+
 	#Run the environment
-	mb_obs, mb_actions, mb_neg_logprobs, mb_values, mb_returns = runner.run(policy)
+	mb_obs, mb_actions, mb_neg_logprobs, mb_values, mb_returns = runner.run(policy, logstd_cur)
 
 	#Train
 	for i in range(sample_n_epoch):
@@ -173,14 +175,14 @@ for it in range(global_step, n_iter+global_step+1):
 
 			cur_pg_loss, cur_v_loss, _ = sess.run([pg_loss, v_loss, opt], feed_dict={
 				policy.ob_ph: sample_obs,
+				policy.logstd_ph: logstd_cur,
 				action_ph: sample_actions,
 				old_neg_logprob_ph: sample_neg_logprobs,
 				old_v_pred_ph: sample_values,
 				adv_ph: sample_advs,
 				return_ph: sample_returns,
 				lr_ph: lr,
-				clip_ph: clip_val,
-				logstd_ph: logstd
+				clip_ph: clip_val
 			})
 
 	#Show the result
@@ -191,7 +193,7 @@ for it in range(global_step, n_iter+global_step+1):
 		mean_returns.append(mean_return)
 		std_returns.append(std_return)
 
-		print("[{:5d} / {:5d}]".format(it, n_iter+global_step))
+		print("[{:5d} / {:5d}]".format(it, n_iter))
 		print("----------------------------------")
 		print("Total timestep = {:d}".format(it * mb_size))
 		print("Elapsed time = {:.2f} sec".format(n_sec))
@@ -200,7 +202,7 @@ for it in range(global_step, n_iter+global_step+1):
 		print("v_loss = {:.6f}".format(cur_v_loss))
 		print("mean_total_reward = {:.6f}".format(mean_return))
 		print("mean_len = {:.2f}".format(mean_len))
-		print("logstd = {}".format(logstd[0]))
+		print("logstd = {:.6f}".format(logstd_cur[0, 0]))
 		print()
 
 	#Save

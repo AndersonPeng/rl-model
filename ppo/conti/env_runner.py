@@ -15,8 +15,7 @@ class MultiEnvRunner:
 		self.lamb = lamb
 		self.s_dim = s_dim
 		self.a_dim = a_dim
-		self.logstd = np.zeros((1, a_dim), dtype=np.float32)
-
+		
 		#obs:   (n_env, s_dim)
 		#dones: (n_env)
 		self.obs = np.zeros((self.n_env, self.s_dim), dtype=np.float32)
@@ -33,7 +32,7 @@ class MultiEnvRunner:
 	#--------------------------
 	# Get a batch for n steps
 	#--------------------------
-	def run(self, policy):
+	def run(self, policy, logstd):
 		mb_obs = []
 		mb_actions = [] 
 		mb_values = []
@@ -48,7 +47,7 @@ class MultiEnvRunner:
 			#actions:      (n_env, a_dim)
 			#neg_logprobs: (n_env)
 			#values:       (n_env)
-			actions, values, neg_logprobs = policy.step(self.obs, self.logstd)
+			actions, values, neg_logprobs = policy.step(self.obs, logstd)
 			mb_obs.append(np.copy(self.obs))
 			mb_actions.append(actions)
 			mb_values.append(values)

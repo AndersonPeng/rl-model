@@ -24,6 +24,18 @@ def make_env(rank, env_id="BipedalWalker-v2", rand_seed=0, unwrap=False):
 	return _thunk
 
 
+#-------------------------
+# Get decay logstd
+#-------------------------
+def get_decay_logstd(logstd, global_step, decay_step=5000, decay_rate=1.1, min_logstd=-4.0):
+	new_logstd = logstd * (decay_rate**(global_step/decay_step))
+
+	if new_logstd[0, 0] < min_logstd:
+		return np.array([[min_logstd]*a_dim], dtype=np.float32)
+
+	return new_logstd
+
+
 #Parse arguments
 #----------------------------
 parser = argparse.ArgumentParser()
@@ -134,18 +146,21 @@ else:
 
 mean_returns = []
 std_returns  = []
+logstd = np.zeros((1, a_dim), dtype=np.float32)
+logstd.fill(0.0)
 return_fp = open(os.path.join(save_dir, "avg_return.txt"), "a+")
 t_start = time.time()
 
-for it in range(global_step, n_iter+global_step+1):
+for it in range(global_step, n_iter):
 	if is_render: env.render()
 
 	#Train
-	mb_obs, mb_actions, mb_values, mb_discount_returns = runner.run(policy)
+	mb_obs, mb_actions, mb_values, mb_discount_returns = runner.run(policy, get_decay_logstd(logstd, it))
 	mb_advs = mb_discount_returns - mb_values
 
 	cur_actor_loss, cur_critic_loss, cur_ent, _, _ = sess.run([actor_loss, critic_loss, ent, actor_opt, critic_opt], feed_dict={
 		policy.ob_ph: mb_obs,
+		policy.logstd_ph: get_decay_logstd(logstd, it),
 		action_ph: mb_actions,
 		adv_ph: mb_advs,
 		discount_return_ph: mb_discount_returns,
@@ -161,7 +176,7 @@ for it in range(global_step, n_iter+global_step+1):
 		mean_returns.append(mean_return)
 		std_returns.append(std_return)
 
-		print("[{:5d} / {:5d}]".format(it, n_iter+global_step))
+		print("[{:5d} / {:5d}]".format(it, n_iter))
 		print("----------------------------------")
 		print("Total timestep = {:d}".format(it * mb_size))
 		print("Elapsed time = {:.2f} sec".format(n_sec))
@@ -169,6 +184,7 @@ for it in range(global_step, n_iter+global_step+1):
 		print("actor_loss = {:.6f}".format(cur_actor_loss))
 		print("critic_loss = {:.6f}".format(cur_critic_loss))
 		print("entropy = {:.6f}".format(cur_ent))
+		print("logstd = {:.6f}".format(get_decay_logstd(logstd, it)[0, 0]))
 		print("mean_total_reward = {:.6f}".format(mean_return))
 		print("mean_len = {:.2f}".format(mean_len))
 		print()

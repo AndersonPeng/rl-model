@@ -34,17 +34,12 @@ a_high = env.action_space.high[0]
 s_dim = env.observation_space.shape[0]
 
 
-#Placeholders
-#----------------------------
-logstd_ph = tf.placeholder(tf.float32, [1, a_dim], name="logstd")
-
-
 #Create the model
 #----------------------------
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
-policy = PolicyModel(sess, logstd_ph, s_dim, a_dim, a_low, a_high)
+policy = PolicyModel(sess, s_dim, a_dim, a_low, a_high)
 
 
 #Start playing
