@@ -27,6 +27,7 @@ for i in range(1, len(avg_return)):
 
 avg_return = np.array(avg_return)
 std_return = np.array(std_return)
+return_fp.close()
 
 
 #Plot
