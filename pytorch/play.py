@@ -1,6 +1,5 @@
 from model import PolicyNet
 import torch
-import torch.nn as nn
 import numpy as np
 import os
 import gym
@@ -41,7 +40,7 @@ def main():
 
 	#Create model
 	#----------------------------
-	policy_net = PolicyNet(s_dim, a_dim, args.conti).to(device)
+	policy_net = PolicyNet(s_dim, a_dim, conti=args.conti).to(device)
 
 	#Load model
 	#----------------------------

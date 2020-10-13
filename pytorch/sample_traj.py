@@ -1,6 +1,5 @@
 from model import PolicyNet
 import torch
-import torch.nn as nn
 import numpy as np
 import os
 import gym
@@ -44,7 +43,7 @@ def main():
 
 	#Create model
 	#----------------------------
-	policy_net = PolicyNet(s_dim, a_dim, args.conti).to(device)
+	policy_net = PolicyNet(s_dim, a_dim, conti=args.conti).to(device)
 
 	#Load model
 	#----------------------------
@@ -73,8 +72,11 @@ def main():
 			action = policy_net.action_step(torch.from_numpy(np.expand_dims(ob.__array__(), axis=0)).float().to(device), deterministic=True)
 			action = action.cpu().detach().numpy()[0]
 
+			#Continuous: concat (s, a)
 			if args.conti:
 				sa_traj[it].append(np.hstack([ob, action]))
+			
+			#Discrete: concat (s, a_onehot)
 			else:
 				action_onehot = np.zeros([a_dim])
 				action_onehot[action] = 1

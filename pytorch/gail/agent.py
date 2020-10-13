@@ -14,25 +14,25 @@ class A2C:
 		policy_net, 
 		value_net, 
 		dis_net, 
-		device, 
 		a_dim,
 		lr=1e-4, 
 		max_grad_norm=0.5, 
 		ent_weight=0.01,
 		mb_size=128,
+		device="cuda:0",
 		conti=False
 	):
 		self.opt_actor     = torch.optim.Adam(policy_net.parameters(), lr)
 		self.opt_critic    = torch.optim.Adam(value_net.parameters(), lr)
 		self.opt_dis       = torch.optim.Adam(dis_net.parameters(), lr)
-		self.device        = device
 		self.a_dim         = a_dim
 		self.lr            = lr
 		self.max_grad_norm = max_grad_norm
 		self.ent_weight    = ent_weight
 		self.criterion     = nn.BCELoss()
-		self.ones_label    = torch.autograd.Variable(torch.ones((mb_size, 1))).to(self.device)
-		self.zeros_label   = torch.autograd.Variable(torch.zeros((mb_size, 1))).to(self.device)
+		self.ones_label    = torch.autograd.Variable(torch.ones((mb_size, 1))).to(device)
+		self.zeros_label   = torch.autograd.Variable(torch.zeros((mb_size, 1))).to(device)
+		self.device        = device
 		self.conti         = conti
 
 
@@ -106,7 +106,6 @@ class PPO:
 		policy_net, 
 		value_net, 
 		dis_net,
-		device, 
 		a_dim,
 		lr=1e-4, 
 		max_grad_norm=0.5, 
@@ -115,12 +114,12 @@ class PPO:
 		sample_n_epoch=4,
 		sample_mb_size=64,
 		mb_size=1024,
+		device="cuda:0", 
 		conti=False
 	):
 		self.opt_actor      = torch.optim.Adam(policy_net.parameters(), lr)
 		self.opt_critic     = torch.optim.Adam(value_net.parameters(), lr)
 		self.opt_dis        = torch.optim.Adam(dis_net.parameters(), lr)
-		self.device         = device
 		self.a_dim          = a_dim
 		self.lr             = lr
 		self.max_grad_norm  = max_grad_norm
@@ -131,8 +130,9 @@ class PPO:
 		self.sample_n_mb    = mb_size // sample_mb_size
 		self.rand_idx       = np.arange(mb_size)
 		self.criterion      = nn.BCELoss()
-		self.ones_label     = torch.autograd.Variable(torch.ones((sample_mb_size, 1))).to(self.device)
-		self.zeros_label    = torch.autograd.Variable(torch.zeros((sample_mb_size, 1))).to(self.device)
+		self.ones_label     = torch.autograd.Variable(torch.ones((sample_mb_size, 1))).to(device)
+		self.zeros_label    = torch.autograd.Variable(torch.zeros((sample_mb_size, 1))).to(device)
+		self.device         = device
 		self.conti          = conti
 
 
@@ -187,8 +187,6 @@ class PPO:
 				pg_loss2 = -sample_advs * torch.clamp(ratio, 1.0-self.clip_val, 1.0+self.clip_val)
 				pg_loss  = torch.max(pg_loss1, pg_loss2).mean() - self.ent_weight*ent
 
-				ac_loss = pg_loss + 0.2*v_loss
-
 				#Train actor
 				self.opt_actor.zero_grad()
 				pg_loss.backward()
@@ -209,8 +207,11 @@ class PPO:
 			sample_obs     = mb_obs[sample_idx]
 			sample_actions = mb_actions[sample_idx]
 
+			#Continuous: concat (s, a)
 			if self.conti:
 				mb_sa_fake = torch.cat([sample_obs, sample_actions], 1)
+			
+			#Discrete: concat (s, a_onehot)
 			else:
 				sample_actions_onehot = np.zeros([self.sample_mb_size, self.a_dim], dtype=np.float32)
 
@@ -230,7 +231,7 @@ class PPO:
 			dis_loss.backward()
 			self.opt_dis.step()
 
-		return pg_loss.item(), v_loss.item(), ac_loss.item(), ent.item(), dis_loss.item(), dis_real.mean().item(), dis_fake.mean().item()
+		return pg_loss.item(), v_loss.item(), ent.item(), dis_loss.item(), dis_real.mean().item(), dis_fake.mean().item()
 
 
 	#-----------------------

@@ -3,13 +3,12 @@ from env_runner import EnvRunner
 from model import PolicyNet, ValueNet, DiscriminatorNet
 from agent import PPO
 import torch
-import torch.nn as nn
-import numpy as np
 import os
 import sys
 import gym
 import time
 import argparse
+import numpy as np
 import pickle as pkl
 
 
@@ -22,7 +21,6 @@ def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--env", default="CartPole-v0")
 	parser.add_argument("--conti", action="store_true")
-	parser.add_argument("--render", action="store_true")
 	parser.add_argument("--unwrap", action="store_true")
 	args = parser.parse_args()
 
@@ -39,7 +37,7 @@ def main():
 	ent_weight     = 0.0
 	max_grad_norm  = 0.5
 	lr             = 1e-4
-	n_iter         = 300000
+	n_iter         = 30000
 	disp_step      = 30
 	save_step      = 300
 	save_dir       = "./save"
@@ -61,10 +59,10 @@ def main():
 		env, 
 		s_dim, 
 		a_dim,
-		device, 
 		n_step, 
 		gamma,
-		args.conti
+		device=device, 
+		conti=args.conti
 	)
 
 	#Load expert trajectories
@@ -78,14 +76,13 @@ def main():
 
 	#Create model
 	#----------------------------
-	policy_net = PolicyNet(s_dim, a_dim, args.conti).to(device)
+	policy_net = PolicyNet(s_dim, a_dim, conti=args.conti).to(device)
 	value_net  = ValueNet(s_dim).to(device)
 	dis_net    = DiscriminatorNet(s_dim+a_dim).to(device)
 	agent      = PPO(
 		policy_net, 
 		value_net,
 		dis_net, 
-		device,
 		a_dim, 
 		lr, 
 		max_grad_norm, 
@@ -94,6 +91,7 @@ def main():
 		sample_n_epoch, 
 		sample_mb_size, 
 		mb_size,
+		device=device,
 		conti=args.conti
 	)
 
@@ -120,8 +118,6 @@ def main():
 	value_net.train()
 
 	for it in range(start_it, n_iter):
-		if args.render: env.render()
-
 		#Run the environment
 		with torch.no_grad():
 			mb_obs, mb_actions, mb_values, mb_returns, mb_old_a_logps = runner.run(policy_net, value_net, dis_net)
@@ -129,7 +125,7 @@ def main():
 			mb_advs = (mb_advs - mb_advs.mean()) / (mb_advs.std() + 1e-6)
 
 		#Train
-		pg_loss, v_loss, ac_loss, ent, dis_loss, dis_real, dis_fake = agent.train(
+		pg_loss, v_loss, ent, dis_loss, dis_real, dis_fake = agent.train(
 			policy_net, 
 			value_net, 
 			dis_net,
@@ -158,7 +154,6 @@ def main():
 			print("Timesteps    = {:d}".format((it - start_it) * mb_size))
 			print("Elapsed time = {:.2f} sec".format(n_sec))
 			print("FPS          = {:d}".format(fps))
-			print("ppo loss     = {:.6f}".format(ac_loss))
 			print("actor loss   = {:.6f}".format(pg_loss))
 			print("critic loss  = {:.6f}".format(v_loss))
 			print("dis loss     = {:.6f}".format(dis_loss))

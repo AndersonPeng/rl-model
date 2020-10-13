@@ -9,14 +9,13 @@ class A2C:
 	#-----------------------
 	# Constructor
 	#-----------------------
-	def __init__(self, policy_net, value_net, device, lr=1e-4, max_grad_norm=0.5, ent_weight=0.01):
+	def __init__(self, policy_net, value_net, lr=1e-4, max_grad_norm=0.5, ent_weight=0.01, device="cuda:0"):
 		self.opt_actor     = torch.optim.Adam(policy_net.parameters(), lr)
 		self.opt_critic    = torch.optim.Adam(value_net.parameters(), lr)
-		self.device        = device
 		self.lr            = lr
 		self.max_grad_norm = max_grad_norm
 		self.ent_weight    = ent_weight
-		self.init_ent_weight = ent_weight
+		self.device        = device
 
 
 	#-----------------------
@@ -31,7 +30,6 @@ class A2C:
 		ent     = mb_ents.mean()
 		pg_loss = -(torch.from_numpy(mb_advs).to(self.device) * mb_a_logps).mean() - self.ent_weight*ent
 		v_loss  = (torch.from_numpy(mb_returns).to(self.device) - mb_values).pow(2).mean()
-		ac_loss = pg_loss + 0.2*v_loss
 
 		#Train actor
 		self.opt_actor.zero_grad()
@@ -45,7 +43,7 @@ class A2C:
 		nn.utils.clip_grad_norm_(value_net.parameters(), self.max_grad_norm)
 		self.opt_critic.step()
 
-		return pg_loss.item(), v_loss.item(), ac_loss.item(), ent.item()
+		return pg_loss.item(), v_loss.item(), ent.item()
 
 
 	#-----------------------
@@ -65,14 +63,14 @@ class PPO:
 		self, 
 		policy_net, 
 		value_net, 
-		device, 
 		lr=1e-4, 
 		max_grad_norm=0.5, 
 		ent_weight=0.01,
 		clip_val=0.2,
 		sample_n_epoch=4,
 		sample_mb_size=64,
-		mb_size=1024
+		mb_size=1024,
+		device="cuda:0"
 	):
 		self.opt_actor      = torch.optim.Adam(policy_net.parameters(), lr)
 		self.opt_critic     = torch.optim.Adam(value_net.parameters(), lr)
@@ -125,8 +123,6 @@ class PPO:
 				pg_loss2 = -sample_advs * torch.clamp(ratio, 1.0-self.clip_val, 1.0+self.clip_val)
 				pg_loss  = torch.max(pg_loss1, pg_loss2).mean() - self.ent_weight*ent
 
-				ac_loss = pg_loss + 0.2*v_loss
-
 				#Train actor
 				self.opt_actor.zero_grad()
 				pg_loss.backward()
@@ -139,7 +135,7 @@ class PPO:
 				nn.utils.clip_grad_norm_(value_net.parameters(), self.max_grad_norm)
 				self.opt_critic.step()
 
-		return pg_loss.item(), v_loss.item(), ac_loss.item(), ent.item()
+		return pg_loss.item(), v_loss.item(), ent.item()
 
 
 	#-----------------------

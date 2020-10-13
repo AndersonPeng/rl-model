@@ -1,6 +1,6 @@
 import torch
-import numpy as np
 import gym
+import numpy as np
 from collections import deque
 
 
@@ -23,20 +23,20 @@ class EnvRunner:
 	#-----------------------
 	# Constructor
 	#-----------------------
-	def __init__(self, env, s_dim, a_dim, device, n_step=5, gamma=0.99, conti=False):
+	def __init__(self, env, s_dim, a_dim, n_step=5, gamma=0.99, device="cuda:0", conti=False):
 		self.env    = env
 		self.n_env  = env.n_env
-		self.n_step = n_step
-		self.gamma  = gamma
 		self.s_dim  = s_dim
 		self.a_dim  = a_dim
+		self.n_step = n_step
+		self.gamma  = gamma
 		self.device = device
 		self.conti  = conti
 
-		#obs: (n_env, s_dim)
+		#last state: (n_env, s_dim)
 		self.obs = self.env.reset()
 
-		#Storages
+		#Storages (state, action, value, return, a_logp, done)
 		self.mb_obs     = np.zeros((self.n_step, self.n_env, self.s_dim), dtype=np.float32)
 		self.mb_values  = np.zeros((self.n_step, self.n_env), dtype=np.float32)
 		self.mb_rewards = np.zeros((self.n_step, self.n_env), dtype=np.float32)
@@ -57,14 +57,14 @@ class EnvRunner:
 
 
 	#-----------------------
-	# Get a batch for n steps
+	# Run n steps to get a batch
 	#-----------------------
 	def run(self, policy_net, value_net):
 		#1. Run n steps
 		#-------------------------------------
 		for step in range(self.n_step):
 			#obs    : (n_env, s_dim)
-			#actions: (n_env) / (n_env, a_dim)
+			#actions: (n_env) or (n_env, a_dim)
 			#a_logps: (n_env)
 			#values : (n_env)
 			obs_tensor = torch.from_numpy(self.obs).float().to(self.device)
@@ -92,7 +92,7 @@ class EnvRunner:
 		#2. Convert to np array
 		#-------------------------------------
 		#mb_obs:     (n_env, n_step, s_dim)
-		#mb_actions: (n_env, n_step) / (n_env, n_step, a_dim)
+		#mb_actions: (n_env, n_step) or (n_env, n_step, a_dim)
 		#mb_values:  (n_env, n_step)
 		#mb_rewards: (n_env, n_step)
 		#mb_a_logps: (n_env, n_step)
@@ -118,7 +118,7 @@ class EnvRunner:
 				self.mb_returns[step, :] = discount_with_dones(rewards.tolist(), dones.tolist(), self.gamma)
 
 		#mb_obs    : (n_env*n_step, s_dim)
-		#mb_actions: (n_env*n_step) / (n_env*n_step, a_dim)
+		#mb_actions: (n_env*n_step) or (n_env*n_step, a_dim)
 		#mb_values : (n_env*n_step)
 		#mb_returns: (n_env*n_step)
 		#mb_a_logps: (n_env*n_step)

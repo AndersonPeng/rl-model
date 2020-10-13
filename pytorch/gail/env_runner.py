@@ -23,7 +23,7 @@ class EnvRunner:
 	#-----------------------
 	# Constructor
 	#-----------------------
-	def __init__(self, env, s_dim, a_dim, device, n_step=5, gamma=0.99, conti=False):
+	def __init__(self, env, s_dim, a_dim, n_step=5, gamma=0.99, device="cuda:0", conti=False):
 		self.env    = env
 		self.n_env  = env.n_env
 		self.n_step = n_step
@@ -85,7 +85,7 @@ class EnvRunner:
 			#dones  : (n_env)
 			self.obs, rewards, dones, info = self.env.step(actions)
 			self.mb_true_rewards[step, :] = rewards
-			self.mb_dones[step, :]   = dones
+			self.mb_dones[step, :] = dones
 
 		#last_values: (n_env)
 		last_values = value_net(torch.from_numpy(self.obs).float().to(self.device))
@@ -105,12 +105,18 @@ class EnvRunner:
 		mb_a_logps      = self.mb_a_logps.swapaxes(1, 0)
 		mb_dones        = self.mb_dones.swapaxes(1, 0)
 
-		#Compute reward from discriminator
+		self.record(mb_true_rewards, mb_dones)
+
+		#3. Compute reward from discriminator
+		#-------------------------------------
+		#Continuous: concat (s, a)
 		if self.conti:
 			mb_sa = torch.from_numpy(np.concatenate([
 				mb_obs.reshape(self.n_env*self.n_step, -1),
 				mb_actions.reshape(self.n_env*self.n_step, -1)
 			], 1)).float().to(self.device)
+		
+		#Discrete: concat (s, a_onehot)
 		else:
 			mb_actions_onehot = np.zeros([self.n_step*self.n_env, self.a_dim])
 			for i in range(self.n_env):
@@ -122,11 +128,9 @@ class EnvRunner:
 				mb_actions_onehot
 			], 1)).float().to(self.device)
 
-		mb_rewards = -np.log(1e-8 + 1.0 - dis_net.prob_step(mb_sa).cpu().numpy()).reshape(self.n_env, self.n_step)
+		mb_rewards = -np.log(1e-8 + 1.0 - dis_net(mb_sa).cpu().numpy()).reshape(self.n_env, self.n_step)
 
-		self.record(mb_true_rewards, mb_dones)
-
-		#3. Compute returns
+		#4. Compute returns
 		#-------------------------------------
 		for step, (rewards, dones, value) in enumerate(zip(mb_rewards, mb_dones, last_values)):
 			#The last step is not done, add the last value

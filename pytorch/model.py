@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from distrib import Categorical, DiagGaussian
 from utils import init
 

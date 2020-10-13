@@ -144,10 +144,3 @@ class DiscriminatorNet(nn.Module):
 		logits  = self.fc_d(feature)
 
 		return torch.sigmoid(logits)
-
-
-	def prob_step(self, sa):
-		feature = self.main(sa)
-		logits  = self.fc_d(feature)
-
-		return torch.sigmoid(logits)
