@@ -1,14 +1,16 @@
 from multi_env import MultiEnv, make_env
 from env_runner import EnvRunner
-from model import PolicyNet, ValueNet
+from model import PolicyNet, ValueNet, DiscriminatorNet
 from agent import PPO
 import torch
 import torch.nn as nn
 import numpy as np
 import os
+import sys
 import gym
 import time
 import argparse
+import pickle as pkl
 
 
 #-----------------------
@@ -30,7 +32,6 @@ def main():
 	n_step         = 128
 	mb_size        = n_env*n_step
 	sample_mb_size = 64
-	sample_n_mb    = mb_size // sample_mb_size
 	sample_n_epoch = 4
 	clip_val       = 0.2
 	lamb           = 0.95
@@ -43,6 +44,7 @@ def main():
 	save_step      = 300
 	save_dir       = "./save"
 	device         = "cuda:0"
+	expert_path    = "../save/{}_traj.pkl".format(args.env)
 
 	#Create multiple environments
 	#----------------------------
@@ -65,20 +67,34 @@ def main():
 		args.conti
 	)
 
+	#Load expert trajectories
+	#----------------------------
+	if os.path.exists(expert_path):
+		sa_real = pkl.load(open(expert_path, "rb"))
+		sa_real = np.concatenate(sa_real, 0)
+	else:
+		print("ERROR: No expert trajectory file found")
+		sys.exit(1)
+
 	#Create model
 	#----------------------------
 	policy_net = PolicyNet(s_dim, a_dim, args.conti).to(device)
 	value_net  = ValueNet(s_dim).to(device)
+	dis_net    = DiscriminatorNet(s_dim+a_dim).to(device)
 	agent      = PPO(
 		policy_net, 
-		value_net, 
-		device, lr, 
+		value_net,
+		dis_net, 
+		device,
+		a_dim, 
+		lr, 
 		max_grad_norm, 
 		ent_weight, 
 		clip_val, 
 		sample_n_epoch, 
 		sample_mb_size, 
 		mb_size,
+		conti=args.conti
 	)
 
 	#Load model
@@ -91,6 +107,7 @@ def main():
 		checkpoint = torch.load(os.path.join(save_dir, "{}.pt".format(args.env)))
 		policy_net.load_state_dict(checkpoint["PolicyNet"])
 		value_net.load_state_dict(checkpoint["ValueNet"])
+		dis_net.load_state_dict(checkpoint["DiscriminatorNet"])
 		start_it = checkpoint["it"]
 		print("Done.")
 	else:
@@ -107,20 +124,22 @@ def main():
 
 		#Run the environment
 		with torch.no_grad():
-			mb_obs, mb_actions, mb_values, mb_returns, mb_old_a_logps = runner.run(policy_net, value_net)
+			mb_obs, mb_actions, mb_values, mb_returns, mb_old_a_logps = runner.run(policy_net, value_net, dis_net)
 			mb_advs = mb_returns - mb_values
 			mb_advs = (mb_advs - mb_advs.mean()) / (mb_advs.std() + 1e-6)
 
 		#Train
-		pg_loss, v_loss, ac_loss, ent = agent.train(
+		pg_loss, v_loss, ac_loss, ent, dis_loss, dis_real, dis_fake = agent.train(
 			policy_net, 
 			value_net, 
+			dis_net,
 			mb_obs, 
 			mb_actions, 
 			mb_values,
 			mb_advs, 
 			mb_returns,
-			mb_old_a_logps
+			mb_old_a_logps,
+			sa_real
 		)
 
 		#Print the result
@@ -136,15 +155,18 @@ def main():
 
 			print("[{:5d} / {:5d}]".format(it, n_iter))
 			print("----------------------------------")
-			print("Total timestep = {:d}".format((it - start_it) * mb_size))
-			print("Elapsed time   = {:.2f} sec".format(n_sec))
-			print("FPS            = {:d}".format(fps))
-			print("ppo loss       = {:.6f}".format(ac_loss))
-			print("actor loss     = {:.6f}".format(pg_loss))
-			print("critic loss    = {:.6f}".format(v_loss))
-			print("entropy        = {:.6f}".format(ent))
-			print("mean return    = {:.6f}".format(mean_return))
-			print("mean length    = {:.2f}".format(mean_len))
+			print("Timesteps    = {:d}".format((it - start_it) * mb_size))
+			print("Elapsed time = {:.2f} sec".format(n_sec))
+			print("FPS          = {:d}".format(fps))
+			print("ppo loss     = {:.6f}".format(ac_loss))
+			print("actor loss   = {:.6f}".format(pg_loss))
+			print("critic loss  = {:.6f}".format(v_loss))
+			print("dis loss     = {:.6f}".format(dis_loss))
+			print("entropy      = {:.6f}".format(ent))
+			print("mean return  = {:.6f}".format(mean_return))
+			print("mean length  = {:.2f}".format(mean_len))
+			print("dis_real     = {:.3f}".format(dis_real))
+			print("dis_fake     = {:.3f}".format(dis_fake))
 			print()
 
 		#Save model
@@ -153,7 +175,8 @@ def main():
 			torch.save({
 				"it": it,
 				"PolicyNet": policy_net.state_dict(),
-				"ValueNet": value_net.state_dict()
+				"ValueNet": value_net.state_dict(),
+				"DiscriminatorNet": dis_net.state_dict()
 			}, os.path.join(save_dir, "{}.pt".format(args.env)))
 			print("Done.")
 			print()
