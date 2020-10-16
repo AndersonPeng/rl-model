@@ -120,7 +120,7 @@ def main():
 	for it in range(start_it, n_iter):
 		#Run the environment
 		with torch.no_grad():
-			mb_obs, mb_actions, mb_values, mb_returns, mb_old_a_logps = runner.run(policy_net, value_net, dis_net)
+			mb_obs, mb_actions, mb_old_a_logps, mb_values, mb_returns = runner.run(policy_net, value_net, dis_net)
 			mb_advs = mb_returns - mb_values
 			mb_advs = (mb_advs - mb_advs.mean()) / (mb_advs.std() + 1e-6)
 
@@ -145,23 +145,24 @@ def main():
 			value_net.eval()
 			n_sec = time.time() - t_start
 			fps = int((it - start_it)*n_env*n_step / n_sec)
-			mean_return, std_return, mean_len = runner.get_performance()
+			mean_true_return, std_true_return, mean_return, std_return, mean_len = runner.get_performance()
 			policy_net.train()
 			value_net.train()
 
 			print("[{:5d} / {:5d}]".format(it, n_iter))
 			print("----------------------------------")
-			print("Timesteps    = {:d}".format((it - start_it) * mb_size))
-			print("Elapsed time = {:.2f} sec".format(n_sec))
-			print("FPS          = {:d}".format(fps))
-			print("actor loss   = {:.6f}".format(pg_loss))
-			print("critic loss  = {:.6f}".format(v_loss))
-			print("dis loss     = {:.6f}".format(dis_loss))
-			print("entropy      = {:.6f}".format(ent))
-			print("mean return  = {:.6f}".format(mean_return))
-			print("mean length  = {:.2f}".format(mean_len))
-			print("dis_real     = {:.3f}".format(dis_real))
-			print("dis_fake     = {:.3f}".format(dis_fake))
+			print("Timesteps        = {:d}".format((it - start_it) * mb_size))
+			print("Elapsed time     = {:.2f} sec".format(n_sec))
+			print("FPS              = {:d}".format(fps))
+			print("actor loss       = {:.6f}".format(pg_loss))
+			print("critic loss      = {:.6f}".format(v_loss))
+			print("dis loss         = {:.6f}".format(dis_loss))
+			print("entropy          = {:.6f}".format(ent))
+			print("mean true return = {:.6f}".format(mean_true_return))
+			print("mean return      = {:.6f}".format(mean_return))
+			print("mean length      = {:.2f}".format(mean_len))
+			print("dis_real         = {:.3f}".format(dis_real))
+			print("dis_fake         = {:.3f}".format(dis_fake))
 			print()
 
 		#Save model

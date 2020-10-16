@@ -103,7 +103,7 @@ def main():
 	for it in range(start_it, n_iter):
 		#Run the environment
 		with torch.no_grad():
-			mb_obs, mb_actions, mb_values, mb_returns, mb_old_a_logps = runner.run(policy_net, value_net)
+			mb_obs, mb_actions, mb_old_a_logps, mb_values, mb_returns = runner.run(policy_net, value_net)
 			mb_advs = mb_returns - mb_values
 			mb_advs = (mb_advs - mb_advs.mean()) / (mb_advs.std() + 1e-6)
 
