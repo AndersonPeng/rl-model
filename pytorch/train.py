@@ -58,6 +58,7 @@ def main():
 		a_dim,
 		n_step, 
 		gamma,
+		lamb,
 		device=device,
 		conti=args.conti
 	)

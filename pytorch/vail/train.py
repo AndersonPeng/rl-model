@@ -70,7 +70,21 @@ def main():
 	#Load expert trajectories
 	#----------------------------
 	if os.path.exists(expert_path):
-		sa_real = pkl.load(open(expert_path, "rb"))
+		s_real, a_real = pkl.load(open(expert_path, "rb"))
+		sa_real = []
+
+		if args.conti:
+			for i in range(len(s_real)):
+				sa_real.append(np.concatenate([s_real[i], a_real[i]], 1))
+		else:
+			for i in range(len(s_real)):
+				a_real_onehot = np.zeros((len(a_real[i]), a_dim), dtype=np.float32)
+
+				for j in range(len(a_real[i])):
+					a_real_onehot[j, a_real[i][j]] = 1
+
+				sa_real.append(np.concatenate([s_real[i], a_real_onehot], 1))
+
 		sa_real = np.concatenate(sa_real, 0)
 	else:
 		print("ERROR: No expert trajectory file found")

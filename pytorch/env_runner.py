@@ -53,13 +53,14 @@ class EnvRunner:
 	#-----------------------
 	# Constructor
 	#-----------------------
-	def __init__(self, env, s_dim, a_dim, n_step=5, gamma=0.99, device="cuda:0", conti=False):
+	def __init__(self, env, s_dim, a_dim, n_step=5, gamma=0.99, lamb=0.95, device="cuda:0", conti=False):
 		self.env    = env
 		self.n_env  = env.n_env
 		self.s_dim  = s_dim
 		self.a_dim  = a_dim
 		self.n_step = n_step
 		self.gamma  = gamma
+		self.lamb   = lamb
 		self.device = device
 		self.conti  = conti
 
@@ -122,7 +123,7 @@ class EnvRunner:
 
 		#2. Compute returns
 		#-------------------------------------
-		mb_returns = compute_discounted_return(self.mb_rewards, self.mb_dones, last_values, self.dones, gamma=self.gamma)
+		mb_returns = compute_gae(self.mb_rewards, self.mb_values, self.mb_dones, last_values, self.dones, self.gamma, self.lamb)
 
 		#mb_obs    : (n_step*n_env, s_dim)
 		#mb_actions: (n_step*n_env) or (n_env*n_step, a_dim)
